@@ -8,21 +8,14 @@ from launch.substitutions import Command, LaunchConfiguration
 from pathlib import Path
 
 def generate_launch_description():    
-    # Declare the model argument
-    model_argument = DeclareLaunchArgument(
-        'model',
-        default_value=os.path.join(
-            get_package_share_directory('arctos_description'),
-            'urdf',
-            # 's.urdf'  # Corrected file name
-            'arctos.urdf.xacro'  # Corrected file name
-        ),
-        description='The robot model to load'
-    )
-
     # Generate the robot description from the xacro file
+    urdf_path = os.path.join(
+        get_package_share_directory('arctos_description'),
+        'urdf',
+        'arctos.urdf.xacro'
+    )
     robot_description_content = ParameterValue(
-        Command(['xacro ', LaunchConfiguration('model')]),
+        Command(['xacro ', urdf_path]),
         value_type=str
     )
 
@@ -57,7 +50,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        model_argument,
         robot_state_publisher_node,
         joint_state_publisher_gui_node,
         rviz_node
