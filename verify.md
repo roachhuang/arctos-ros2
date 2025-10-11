@@ -37,7 +37,11 @@ ros2 run rviz2 rviz2 -d /home/roach/ros2_ws/src/arctos/arctos_description/rviz/d
 the above steps 1-3 is equivalent to ros2 launch arctos_bringup arctos.launch.py
 
 step 1-4 is here: ros2 launch arctos_bringup my_moveit.launch.py 
-planning in code: ros2 run arctos_commander_cpp test_moveit (no need to add motion planning in rviz)
+planning in code: ros2 run arctos_commander_cpp test_moveit (no need to add motion planning in rviz), links->tool_link->check Show Trail
+
+test:
+    ros2 run arctos_commander_cpp commander
+    ros2 topic pub -1 /open_gripper example_interfaces/msg/Bool "{data: false}"
 
 ---------------------------------------------------------------------------
 rqt_graph

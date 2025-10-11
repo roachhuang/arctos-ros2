@@ -93,6 +93,12 @@ def generate_launch_description():
         ),
     )
     
+    spawn_commander = Node(
+        package="arctos_commander_cpp",
+        executable="spawner",      
+    )
+    
+    
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
