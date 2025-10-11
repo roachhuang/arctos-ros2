@@ -17,12 +17,7 @@ def generate_launch_description():
         Command(['xacro ', urdf_path]),
         value_type=str
     )
-    rviz_config_path = os.path.join(
-        get_package_share_directory('arctos_description'),
-        'rviz',
-        'moveit.rviz'
-    )
-    rviz_args = ['-d', rviz_config_path] if os.path.exists(rviz_config_path) else []
+    rviz_config_path = '/home/roach/ros2_ws/src/arctos/arctos_description/rviz/default.rviz'
     
     # ROS2 controllers configuration file path
     yaml_path = os.path.join(
@@ -102,7 +97,7 @@ def generate_launch_description():
         package='rviz2',
         executable='rviz2',
         output='screen',
-        arguments=rviz_args
+        arguments=['-d', rviz_config_path],
     )
 
     return LaunchDescription(
