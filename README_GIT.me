@@ -1,0 +1,50 @@
+git checkout master
+git merge bugfix
+# Handle any merge conflicts
+git commit        # If there were conflicts
+git push origin master
+git branch -d bugfix   # Optional: delete local bugfix branch
+git push origin --delete bugfix # Optional: delete remote bugfix branch
+
+MAJOR.MINOR.PATCH
+git tag
+git tag -a v1.0 -m "Release version 1.0"
+git show v1.0.0
+git push --tags
+
+git stash:
+    git stash
+    git checkout bugfix
+    git checkout master
+    git stash pop
+
+when to use rebase:
+    When: You have messy, incremental commits (e.g., "WIP" or "fix typo" commits) in your local branch.
+    Why: Rebase lets you squash, edit, or reorder commits to create a logical, readable history before sharing your work.
+        git rebase -i HEAD~3  # Rebase the last 3 commits interactively
+
+    When: Your feature branch is behind the main/develop branch and you want to incorporate the latest changes.
+    Why: Rebasing avoids merge commits and keeps your branch’s history linear.
+        git checkout feature-branch
+        git fetch origin   # Fetch latest changes
+        git rebase origin/main  # Rebase onto main branch
+    
+    Example workflow:
+        # Start a feature branch
+        git checkout -b my-feature
+
+        # Work on commits...
+        git commit -m "Add feature A"
+        git commit -m "Fix bug in feature A"
+
+        # Sync with main branch
+        git fetch origin
+        git rebase origin/main   # Rebase onto latest main
+
+        # Resolve conflicts (if any), then force-push
+        git push origin my-feature --force
+
+
+# supposely we should create repo in src folder and push only files in src folder 
+cd ros2_ws/src
+git clone --depth 1 https://github.com/xxx

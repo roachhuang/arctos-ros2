@@ -1,0 +1,20 @@
+<?xml version="1.0" ?>
+<sdf version="1.7">
+  <world name="default">
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+    <include>
+      <uri>model://sun</uri>
+    </include>
+
+    <!-- ✅ ros2_control plugin auto-load -->
+    <plugin name="gz_ros2_control::GazeboSimROS2ControlPlugin" filename="libgz_ros2_control-system.so">
+      <ros2_control>
+        <parameters>
+          <use_sim_time>true</use_sim_time>
+        </parameters>
+      </ros2_control>
+    </plugin>
+  </world>
+</sdf>

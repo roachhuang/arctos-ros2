@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>arctos_hardware_interface</name>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="roach@todo.todo">roach</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend> 
+
+  <!-- <depend>controller_manager</depend> -->
+  <!-- <depend>gripper_controllers</depend> -->
+  
+  <!-- <depend>gz_msgs_vendor</depend> -->
+  <!-- <depend>gz_ros2_control</depend> -->
+  <!-- <depend>ros_gz</depend> -->
+  <!-- <depend>ros_gz_bridge</depend> -->
+  <!-- <depend>ros_gz_image</depend> -->
+  <!-- <depend>ros_gz_sim</depend>  -->
+  <depend>hardware_interface</depend> 
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>pluginlib</depend>
+  <depend>libserial-dev</depend>
+  
+  <!-- <depend>ros2_control</depend> -->
+  <!-- <depend>ros2_controllers</depend> -->
+  <depend>trajectory_msgs</depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <!-- <depend>gripper_controllers</depend> -->
+
+  <!-- <exec_depend>controller_manager</exec_depend> -->
+  <!-- <exec_depend>ros2_control</exec_depend> -->
+  <!-- <exec_depend>ros2_controllers</exec_depend> -->
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <hardware_interface plugin="${prefix}/config/hw_plugin_description.xml"/>
+  </export>
+</package>

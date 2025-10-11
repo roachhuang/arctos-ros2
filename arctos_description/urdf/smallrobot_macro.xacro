@@ -1,0 +1,124 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="arctos">
+  <xacro:property name='PI' value='3.14159' />
+
+  <xacro:macro name="default_inertial" params="mass">
+    <inertial>
+      <mass value="${mass}" />
+      <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+    </inertial>
+  </xacro:macro>
+
+  <!-- Accurate inertial properties for robot links -->
+  <xacro:macro name="base_inertial" params="mass">
+    <inertial>
+      <origin xyz="0.047 0.0121 0.125" rpy="0 0 0"/>
+      <mass value="${mass}" />
+      <inertia ixx="${mass*0.083}" ixy="0.001" ixz="0.002" 
+               iyy="${mass*0.083}" iyz="0.001" 
+               izz="${mass*0.025}" />
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="link1_inertial" params="mass">
+    <inertial>
+      <origin xyz="0.047 0.012 0.104" rpy="0 0 0"/>
+      <mass value="${mass}" />
+      <inertia ixx="${mass*0.045}" ixy="0.001" ixz="0.001" 
+               iyy="${mass*0.045}" iyz="0.001" 
+               izz="${mass*0.015}" />
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="link2_inertial" params="mass">
+    <inertial>
+      <origin xyz="0 0.04 0.055" rpy="0 0 0"/>
+      <mass value="${mass}" />
+      <inertia ixx="${mass*0.012}" ixy="0" ixz="0" 
+               iyy="${mass*0.025}" iyz="0.002" 
+               izz="${mass*0.020}" />
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="link3_inertial" params="mass">
+    <inertial>
+      <origin xyz="-0.013 -0.015 0.013" rpy="0 0 0"/>
+      <mass value="${mass}" />
+      <inertia ixx="${mass*0.003}" ixy="0" ixz="0" 
+               iyy="${mass*0.008}" iyz="0" 
+               izz="${mass*0.008}" />
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="link4_inertial" params="mass">
+    <inertial>
+      <origin xyz="0.008 0.001 0.072" rpy="0 0 0"/>
+      <mass value="${mass}" />
+      <inertia ixx="${mass*0.018}" ixy="0" ixz="0" 
+               iyy="${mass*0.018}" iyz="0" 
+               izz="${mass*0.002}" />
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="link5_inertial" params="mass">
+    <inertial>
+      <origin xyz="0.009 0 0" rpy="0 0 0"/>
+      <mass value="${mass}" />
+      <inertia ixx="${mass*0.001}" ixy="0" ixz="0" 
+               iyy="${mass*0.002}" iyz="0" 
+               izz="${mass*0.002}" />
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="link6_inertial" params="mass">
+    <inertial>
+      <origin xyz="-0.028 0.002 -0.008" rpy="0 0 0"/>
+      <mass value="${mass}" />
+      <inertia ixx="${mass*0.001}" ixy="0" ixz="0" 
+               iyy="${mass*0.003}" iyz="0" 
+               izz="${mass*0.003}" />
+    </inertial>
+  </xacro:macro>  
+
+  <xacro:macro name="default_material">
+    <material name="orange">
+      <color rgba="1.0 0.5 0.0 0.8" />
+    </material>
+  </xacro:macro>
+
+  <xacro:macro name="default_visual" params="xyz rpy size filename">
+    <visual>
+      <origin rpy="${rpy}" xyz="${xyz}" />
+      <geometry>
+        <mesh filename="${filename}" />
+      </geometry>
+      <xacro:default_material name="gray" rgba="1.0 1.0 1.0 0.8" />
+    </visual>
+  </xacro:macro>
+  <xacro:macro name="default_collision" params="xyz rpy size filename">
+    <collision>
+      <origin rpy="${rpy}" xyz="${xyz}" />
+      <geometry>
+        <mesh filename="${filename}" />
+      </geometry>
+    </collision>
+  </xacro:macro>
+  
+  <xacro:macro name="default_link" params="name mass xyz rpy size filename">
+    <link name="${name}">
+      <xacro:default_inertial mass="${mass}" />
+      <xacro:default_visual xyz="${xyz}" rpy="${rpy}" size="${size}" filename="${filename}" />
+      <xacro:default_collision xyz="${xyz}" rpy="${rpy}" size="${size}" filename="${filename}" />
+    </link>
+  </xacro:macro>
+  <xacro:macro name="default_joint"
+    params="name type parent child xyz rpy axis limit effort lower upper velocity">
+    <joint name="${name}" type="${type}">
+      <origin rpy="${rpy}" xyz="${xyz}" />
+      <axis xyz="${axis}" />
+      <limit effort="${effort}" lower="${lower}" upper="${upper}" velocity="${velocity}" />
+      <parent link="${parent}" />
+      <child link="${child}" />
+    </joint>
+  </xacro:macro>
+</robot>

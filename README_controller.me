@@ -1,0 +1,62 @@
+
+You provide:
+
+    A URDF with ros2_control tags
+
+    A custom or simulated hardware interface (SystemInterface)
+
+    A controller config file (YAML)
+
+Then:
+
+ros2 control load_controller --set-state active arm_controller
+
+This tells the controller_manager from ros2_control to load the arm_controller plugin from ros2_controllers.
+
+installation:
+    cd ~/ros2_ws/src
+    git clone https://github.com/ros-controls/ros2_control_demos.git
+Build:
+    cd ~/ros2_ws
+    colcon build --packages-select ros2_control_demo_example_1 --symlink-install
+launch:
+    source ~/ros2_ws/install/setup.bash
+    ros2 launch ros2_control_demo_example_1 rrbot.launch.py
+
+hardwareInterface is essential for ROS 2 when configuring transmissions in a robot's URDF, as it tells ROS which interface will be used for controlling and reading joint states.
+
+In ROS 2, the hardwareInterface defines the type of interface used for communication between the controller and the hardware. Specifically, it indicates whether the joint is controlled by a position, velocity, or effort interface.
+
+TROUBLESHOOTING:
+    check the lib path in ros2_control_demo_example_1.xml matches the shared lib name (e.g., libros2_control_deo_example_1.so)
+    verify pluginlib registreation: if the h/w interface isn't found, clear the pluginlib cache:
+        rm -rf ~/.ros/pluginlib
+    inspect params: ensure the params in the URDF/Xacro file match those expected by rrbot.cpp
+
+    check_urdf /home/roach/ros2_ws/src/twodof/urdf/twodof.urdf
+    ros2 param get /robot_state_publisher robot_description
+    ros2 control list_controllers
+        joint_state_broadcaster [active]
+        position_trajectory_controller [active]
+    ros2 service list | grep controller_manager
+        list_controllers and load_controllers should be listed.
+    # manually run ros controller
+    ros2 run controller_manager ros2_control_node --ros-args --params-file ~/ros2_ws/src/arctos/config/controllers.yaml
+
+TEST:
+    test cmd:    
+        ros2 topic pub /forward_position_controller/commands std_msgs/msg/Float64MultiArray "data: [1.0, -0.5]"
+
+        ros2 topic pub /joint_trajectory_controller/joint_trajectory trajectory_msgs/msg/JointTrajectory "{
+        joint_names: ['joint1', 'joint2'],
+        points: [
+            {
+            positions: [0.0, 0.5],
+            time_from_start: {sec: 2, nanosec: 0}
+            }
+        ]
+        }"
+
+        ros2 topic pub /joint_trajectory_controller/commands std_msgs/msg/Float64MultiArray "{
+  data: [0.0, 0.5]
+}"

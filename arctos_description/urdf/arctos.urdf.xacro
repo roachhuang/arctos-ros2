@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<robot name="arctos" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name='is_sim' default='true' />
+  <xacro:arg name="use_fake_hardware" default="false" />
+
+  <xacro:include filename="$(find arctos_description)/urdf/common_properties.xacro" />
+  <xacro:include filename="$(find arctos_description)/urdf/joint_link.xacro" />
+  
+  
+  <xacro:include filename="$(find arctos_description)/urdf/arctos_arm.xacro" />
+  <xacro:include filename="$(find arctos_description)/urdf/arctos_gripper.xacro" />
+  <xacro:include filename="$(find arctos_description)/urdf/arctos.ros2_control.xacro" />
+
+  <!--- from moveit config package  -->
+  <!-- <xacro:include filename="$(find arctos_description)/urdf/arctos.ros2_control.xacro" /> -->
+
+  <!-- connection btw gripper and arm. Fixed gripper joint, no axis needed -->
+  <joint name="gripper_base_joint" type="fixed">
+    <parent link="tool_link"/>
+    <child link="Gripper_1"/>
+    <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ros2_control with mock components is included directly from arctos.ros2_control.xacro -->
+
+  <!-- include gazebo parameters -->
+  <!-- <xacro:include filename="$(find arctos_description)/urdf/smallrobot_gazebo.xacro" /> -->
+
+</robot> 

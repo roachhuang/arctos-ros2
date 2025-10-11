@@ -1,0 +1,119 @@
+1. **Prerequisites**
+    **USB Port Permissions**
+    To enable communication with the hardware, add your user to the `dialout` group:
+    sudo usermod -aG dialout $USER
+    **A login and logout are required.**
+
+2. **Install Required Packages**
+   ```bash
+   sudo apt-get update && sudo apt-get install -y \
+       libboost-all-dev \
+       ros-jazzy-hardware-interface \
+       ros-jazzy-controller-manager \
+       ros-jazzy-ros2-controllers \
+       ros-jazzy-tf-transformations \
+       ros-jazzy-gz* \
+       ros-jazzy-pal-statistics
+   sudo apt-get install -y ros-jazzy-moveit-* --no-install-recommends
+   ```
+4. **Build the Package**
+   ```bash
+   cd ~/${WORKSPACE}
+   colcon build --symlink-install
+   ```
+
+5. **Source the Workspace**
+   ```bash
+   source ~/${WORKSPACE}/install/setup.bash
+   ```
+
+6. **Create and apply udev rules**
+   ```bash
+   ros2 run open_manipulator_bringup om_create_udev_rules
+   ```
+
+
+echo $ROS_DISTRO
+
+for arctos_alex build:
+    cd ~/ros2_ws && colcon build --packages-select arctos_alex && source install/setup.bash
+
+after git clone a respository
+    rosdep install -y -r -t --rosdistro $(ROS_DISTRO) --from-paths 
+
+in urdf folder, 
+    ros2 run xacro xacro arctos.urdf.xacro > arctos.urdf
+    check_urdf arctos.urdf
+
+cd ~/ros_ws rm -ef build
+sudo apt install ros-humble-urdf-tutorial
+ros2 launch urdf_tutorial display.launch.py model:=/home/roach/ros2_ws/src/arctos/urdf/arctos.urdf
+
+sudo apt install ros-humble-hardware-interface
+rosdep install --from-paths src --ignore-src -r -y
+in ros2_ws folder, colcon build --symlink-install
+colcon build --packages-select arctos --symlink-install --event-handlers console_cohesion+
+
+To send joints cmds using ROS2 control. use the ros2_control CLI tool.
+    1. make sure h/w interface is running
+            ros2 launch arctos myrobot_launch.py
+        now u should have a joint_trajectory_controller or a position_controllers/JointGroupPositionController running.
+    2. check availabel controllers
+        ros2 control list_controllers, you should see below and arm_controller is active
+            joint_state_broadcaster[active]
+            arm_controller[active]
+    3.  send joint cmds
+        a. for a joint trajectory controllers
+            ros2 topic pub /arm_controller/joint_trajectory trajectory_msgs/msg/JointTrajectory "{
+            joint_names: ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6'],
+            points: [
+                {
+                positions: [0.0, 0.5, 1.0, 0.0, -0.5, 0.0],
+                time_from_start: {sec: 2, nanosec: 0}
+                }
+            ]
+            }"
+        b. for a position controllers (position_controllers/JointGroupPositionController)
+            ros2 topic pub /arm_controller/commands std_msgs/msg/Float64MultiArray "{
+            data: [0.0, 0.5, 1.0, 0.0, -0.5, 0.0]
+            }"
+    4.  verify joint states
+            ros2 topic echo /joint_states
+
+
+troubleshotting:
+    sudo usermod -a -G dialout roach
+    ls /dev/ttyUSB*
+    arctos_ros2_control.xacro
+    sudo cat /dev/ttyUSB0
+    colcon build --packages-select robotarm_controller --cmake-clean-cache
+
+startup:
+    colcon build --symlink-install
+    # before running any ROS2 cmds, source ur workspace to ensure the newly built packages is available
+    . install/setup.bash
+    # to read h/w interface log only
+    ros2 launch bringup real_robot.launch.py |grep 'RobotArmInterface'
+    need to sudo cat /dev/ttyUSB0 before launch for robotarm to move.
+
+todo: absoulte and relative
+check yaml
+h/w compoenent name
+Arduino process time must be faster than your hardware interface send interval.
+✅ ROS2 hardware interface must not flood Arduino.
+enable h/w interface for ros2 and aruduino and hybrid ack
+
+cd ~/ros2_ws
+source ~/ws_moveit2/install/setup.bash
+source ~/ros2_ws/install/setup.bash
+cd ~/ros2_ws
+colcon build --base-paths ~/ros2_ws/src/arctos
+// colcon build --symlink-install
+source ~/ros2_ws/install/setup.bash
+
+sh -x src/arctos/bringup/scripts/realbot.sh
+
+
+sh -x src/bringup/scripts/gz.sh
+
+

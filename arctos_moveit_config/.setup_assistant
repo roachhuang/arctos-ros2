@@ -1,0 +1,23 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: arctos_description
+    relative_path: urdf/arctos.urdf.xacro
+  srdf:
+    relative_path: config/arctos.srdf
+  package_settings:
+    author_name: roach
+    author_email: giraftw2002@gmail.com
+    generated_timestamp: 1760081578
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+  modified_urdf:
+    xacros:
+      - control_xacro
+  control_xacro:
+    command:
+      - position
+    state:
+      - position

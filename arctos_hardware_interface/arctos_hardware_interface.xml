@@ -1,0 +1,9 @@
+<library path="arctos_hardware_interface">
+  <class name="arctos_hardware_interface/ArctosHardwareInterface"
+         type="arctos_hardware_interface::ArctosHardwareInterface"
+         base_class_type="hardware_interface::SystemInterface">
+      <description>
+        Hardware interface for Arctos robot arm. use the class name as the plugin at controller xacro
+      </description>
+  </class>
+</library>
