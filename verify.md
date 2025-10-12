@@ -37,11 +37,22 @@ ros2 run rviz2 rviz2 -d /home/roach/ros2_ws/src/arctos/arctos_description/rviz/d
 the above steps 1-3 is equivalent to ros2 launch arctos_bringup arctos.launch.py
 
 step 1-4 is here: ros2 launch arctos_bringup my_moveit.launch.py 
-planning in code: ros2 run arctos_commander_cpp test_moveit (no need to add motion planning in rviz), links->tool_link->check Show Trail
+
+add custom msg pkg - arctos_interfaces
+    ros2 interface show arctos_interfaces/msg/PoseCommand
+    add this line - "/home/roach/ros2_ws/install/arctos_interfaces/include/**" in "includePath" of .vscode->c_cpp_properties.json
+--------------------------------------------------------------------------
 
 test:
+    (no need to add motion planning in rviz), links->tool_link->check Show Trail
+    ros2 interface show example_interfaces/msg/Float64MultiArray
+    
     ros2 run arctos_commander_cpp commander
     ros2 topic pub -1 /open_gripper example_interfaces/msg/Bool "{data: false}"
+
+    ros2 topic pub -1 /pose_cmd arctos_interfaces/msg/PoseCommand "{x: -0.013, y: 0.001, z: 0.715, roll: 0.091, pitch: -0.391, yaw: -2.214, cartesian_path: false}"
+
+
 
 ---------------------------------------------------------------------------
 rqt_graph

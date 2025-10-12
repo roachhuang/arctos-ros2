@@ -4,10 +4,15 @@
 #include <moveit_msgs/msg/robot_trajectory.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <example_interfaces/msg/bool.hpp>
-#include <functional>
+#include <example_interfaces/msg/float64_multi_array.hpp>
+#include <arctos_interfaces/msg/pose_command.hpp>
 
 using MoveGroupInterface = moveit::planning_interface::MoveGroupInterface;
 using Bool = example_interfaces::msg::Bool;
+using FloatArray= example_interfaces::msg::Float64MultiArray;
+using PoseCmd = arctos_interfaces::msg::PoseCommand;
+using namespace std::placeholders;
+
 
 // composer
 class Commander
@@ -26,6 +31,12 @@ public:
 
         open_gripper_sub = node_->create_subscription<Bool>(
             "open_gripper", 10, std::bind(&Commander::OpenGripperCallback, this, std::placeholders::_1));
+        
+        joint_cmd_sub = node_->create_subscription<FloatArray>(
+            "joint_cmd", 10, std::bind(&Commander::JointCmdCallback, this, std::placeholders::_1)); 
+
+        pose_cmd_sub = node_->create_subscription<PoseCmd>(
+            "pose_cmd", 10, std::bind(&Commander::PoseCmdCallback, this, std::placeholders::_1));       
       
     }
 
@@ -47,8 +58,15 @@ public:
 
     void moveToPoseTarget(double x, double y, double z, double roll, double pitch, double yaw, bool cartesian_path = false) 
     {
+        // Validate pose is within reasonable workspace
+        // double distance = sqrt(x*x + y*y + z*z);
+        // if (distance > 0.8 || z < 0.1) {
+        //     RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Target pose out of workspace: distance=%.2f, z=%.2f", distance, z);
+        //     return;
+        // }
+
         tf2::Quaternion q;
-        q.setRPY(roll, pitch, yaw); // convert Roll, Pitch, Yaw to quaternion
+        q.setRPY(roll, pitch, yaw);
         q = q.normalize();
 
         geometry_msgs::msg::PoseStamped target_pose;
@@ -61,20 +79,23 @@ public:
         target_pose.pose.orientation.y = q.getY();
         target_pose.pose.orientation.z = q.getZ();
         target_pose.pose.orientation.w = q.getW();
+        
         arm_->setStartStateToCurrentState();
-        arm_->setPoseTarget(target_pose);
+        
         if (!cartesian_path){
+            arm_->setPoseTarget(target_pose);
             planAndExecute(arm_);
-            RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Move to pose target");
+            RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Move to pose target [%.2f, %.2f, %.2f]", x, y, z);
         } else {
             std::vector<geometry_msgs::msg::Pose> waypoints;
             waypoints.push_back(target_pose.pose);
             moveit_msgs::msg::RobotTrajectory trajectory;
             double fraction = arm_->computeCartesianPath(waypoints, 0.01, trajectory);
-            // double fraction = arm_->computeCartesianPath(waypoints, 0.01, 0.0, trajectory);
             if (fraction == 1){
                 arm_->execute(trajectory);
-                RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Move to pose target");
+                RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Cartesian move to [%.2f, %.2f, %.2f]", x, y, z);
+            } else {
+                RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Cartesian path planning failed, fraction: %.2f", fraction);
             }
         }
     }
@@ -118,11 +139,28 @@ private:
             closeGripper(); 
     }
 
+    void JointCmdCallback(const FloatArray::SharedPtr msg)
+    {
+        auto joints = msg->data;
+        if (joints.size() != 6){
+            RCLCPP_WARN(rclcpp::get_logger("rclcpp"), "Joint command size error");
+            return;
+        }
+        moveToJointTarget(msg->data); 
+    }
+
+    void PoseCmdCallback(const PoseCmd &msg)
+    {
+        moveToPoseTarget(msg.x, msg.y, msg.z, msg.roll, msg.pitch, msg.yaw, msg.cartesian_path); 
+    }   
+
     std::shared_ptr<rclcpp::Node> node_;
     std::shared_ptr<MoveGroupInterface> arm_;
     std::shared_ptr<MoveGroupInterface> gripper_;
 
     rclcpp::Subscription<Bool>::SharedPtr open_gripper_sub;
+    rclcpp::Subscription<FloatArray>::SharedPtr joint_cmd_sub;
+    rclcpp::Subscription<PoseCmd>::SharedPtr pose_cmd_sub;
 };
 
 int main(int argc, char **argv)
