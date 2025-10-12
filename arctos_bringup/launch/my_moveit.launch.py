@@ -21,6 +21,7 @@ def generate_launch_description():
     
     # ROS2 controllers configuration file path
     yaml_path = os.path.join(
+        # get_package_share_directory("arctos_bringup"), "config","real_controllers.yaml"
         get_package_share_directory("arctos_bringup"), "config","ros2_controllers.yaml"
     )
     

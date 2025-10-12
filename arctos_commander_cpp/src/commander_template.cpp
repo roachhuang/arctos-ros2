@@ -117,11 +117,6 @@ private:
         else
             closeGripper(); 
     }
-    void CloseGripperCallback(const Bool::SharedPtr msg)
-    {
-        if (msg->data)
-            closeGripper();
-    }
 
     std::shared_ptr<rclcpp::Node> node_;
     std::shared_ptr<MoveGroupInterface> arm_;

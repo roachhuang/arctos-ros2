@@ -34,10 +34,10 @@
         <joint name="Z_joint" value="0"/>
     </group_state>
     <group_state name="open" group="gripper">
-        <joint name="Left_jaw_joint" value="0.015"/>
+        <joint name="Right_jaw_joint" value="0.0"/>
     </group_state>
     <group_state name="close" group="gripper">
-        <joint name="Left_jaw_joint" value="0"/>
+        <joint name="Right_jaw_joint" value="0.015"/>
     </group_state>
     <!--END EFFECTOR: Purpose: Represent information about an end effector.-->
     <end_effector name="girpper" parent_link="tool_link" group="gripper" parent_group="arm"/>
