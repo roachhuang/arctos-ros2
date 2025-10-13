@@ -66,17 +66,21 @@ struct can_frame ServoManager::absoluteMotion(uint16_t speed, uint8_t accel, uin
 }
 
 struct can_frame ServoManager::absoluteMotionRad(double angleRad, uint16_t speed, uint8_t accel) {
-    double motorRad = angleRad * gearRatio;
-    uint32_t encoderValue = static_cast<uint32_t>((motorRad / TWO_PI) * ENCODER_CPR) % ENCODER_CPR;
-    uint8_t data[6]{
-        CMD::MOTOR::ABSOLUTE_AXIS,
-        accel,
-        static_cast<uint8_t>(speed >> 8),
-        static_cast<uint8_t>(speed & 0xFF),
-        static_cast<uint8_t>(encoderValue >> 8),
-        static_cast<uint8_t>(encoderValue & 0xFF)
+    // Convert radians to position counts for Makerbase servo
+    int32_t position_counts = static_cast<int32_t>(angleRad * 1000); // Scale factor
+    
+    // Use Makerbase protocol format: fd806402000c8070
+    uint8_t data[8]{
+        0xFD,  // Command type
+        0x80,  // Sub-command
+        static_cast<uint8_t>(position_counts & 0xFF),        // Position low byte
+        static_cast<uint8_t>((position_counts >> 8) & 0xFF), // Position high byte
+        0x00,  // Speed parameter 1
+        0x0C,  // Speed parameter 2
+        0x80,  // Fixed byte 1
+        0x70   // Fixed byte 2
     };
-    return pack(data, 6);
+    return pack(data, 8);
 }
 
 struct can_frame ServoManager::enableServo(bool on) {

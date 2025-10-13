@@ -12,28 +12,32 @@
 #include <vector>
 #include <memory>
 
-namespace arctos_hardware_interface {
-// constexpr auto DEFAULT_CAN_INTERFACE = "can0";
+using hardware_interface::return_type;
 
-class ArctosHardwareInterface : public hardware_interface::SystemInterface {
-public:
-    // Lifecycle methods    
+namespace arctos_hardware_interface
+{
+  using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
+
+  class ArctosHardwareInterface : public hardware_interface::SystemInterface
+  {
+  public:
+    // Lifecycle methods
+    CallbackReturn on_init(
+        const hardware_interface::HardwareComponentInterfaceParams &params) override;
     std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
     std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
+    return_type read(const rclcpp::Time &time, const rclcpp::Duration &period) override;
+    return_type write(const rclcpp::Time &time, const rclcpp::Duration &period) override;
 
-    // SystemInterface methods
-    hardware_interface::CallbackReturn on_init(const hardware_interface::HardwareInfo & info) override;
-    hardware_interface::return_type read(const rclcpp::Time & time, const rclcpp::Duration & period) override;
-    hardware_interface::return_type write(const rclcpp::Time & time, const rclcpp::Duration & period) override;
-
-private:
+  private:
     // Wrapper for each servo's data
-    struct ServoWrapper {
-        std::shared_ptr<ServoManager> manager;
-        double current_angle{0.0};
-        double current_velocity{0.0};
-        double target_angle{0.0};
-        double target_velocity{0.0};
+    struct ServoWrapper
+    {
+      std::shared_ptr<ServoManager> manager;
+      double current_angle{0.0};
+      double current_velocity{0.0};
+      double target_angle{0.0};
+      double target_velocity{0.0};
     };
 
     // Map CAN IDs to servo data
@@ -43,17 +47,17 @@ private:
     std::vector<uint8_t> servo_order_;
 
     // Motion defaults
-    double speed_ = 100;    // default speed for all motors
-    uint8_t accel_ = 10;    // default acceleration for all motors
+    double speed_ = 100; // default speed for all motors
+    uint8_t accel_ = 10; // default acceleration for all motors
 
     // CAN socket
     int can_socket_ = -1;
 
     // Simulated CAN read/write functions
     can_frame receiveCAN();
-    void sendCAN(const can_frame& frame);
-};
+    void sendCAN(const can_frame &frame);
+  };
 
-}  // namespace arctos_hardware_interface
+} // namespace arctos_hardware_interface
 
-#endif  // ARCTOS_HARDWARE_INTERFACE_HPP
+#endif // ARCTOS_HARDWARE_INTERFACE_HPP

@@ -12,6 +12,7 @@ ros2 run tf2_tools view_frames
     sudo ip link set can0 type can bitrate 500000
     sudo ip link set can0 up
     ip link show
+    cansend can0 001#fd806402000c8070
 
 ---------------------------------------------------------------------------
 STEP 1:
@@ -36,7 +37,7 @@ ros2 run rviz2 rviz2 -d /home/roach/ros2_ws/src/arctos/arctos_description/rviz/d
 
 the above steps 1-3 is equivalent to ros2 launch arctos_bringup arctos.launch.py
 
-step 1-4 is here: ros2 launch arctos_bringup my_moveit.launch.py 
+step 1-4 is here: ros2 launch arctos_bringup my_moveit.launch.xml use_fake_hardware:=false 
 
 add custom msg pkg - arctos_interfaces
     ros2 interface show arctos_interfaces/msg/PoseCommand
@@ -48,9 +49,19 @@ test:
     ros2 interface show example_interfaces/msg/Float64MultiArray
     
     ros2 run arctos_commander_cpp commander
+    
+    ros2 topic pub -1 /joint_cmd example_interfaces/msg/Float64MultiArray "{data: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]}"
+
     ros2 topic pub -1 /open_gripper example_interfaces/msg/Bool "{data: false}"
 
     ros2 topic pub -1 /pose_cmd arctos_interfaces/msg/PoseCommand "{x: -0.013, y: 0.001, z: 0.715, roll: 0.091, pitch: -0.391, yaw: -2.214, cartesian_path: false}"
+
+    # Direct controller command (bypasses MoveIt):
+    ros2 topic pub /arm_controller/joint_trajectory trajectory_msgs/msg/JointTrajectory "
+    joint_names: ['X_joint', 'Y_joint', 'Z_joint', 'A_joint', 'B_joint', 'C_joint']
+    points:
+    - positions: [0.1, 0.0, 0.0, 0.0, 0.0, 0.0]
+      time_from_start: {sec: 2, nanosec: 0}"
 
 
 
@@ -61,3 +72,6 @@ ros2 control list_controllers
 ros2 control list_controller_types
 ros2 control list_hardware_interfaces
 ros2 control list_hardware_components
+
+ros2 topic echo /joint_states
+ros2 topic list | grep arm_controller

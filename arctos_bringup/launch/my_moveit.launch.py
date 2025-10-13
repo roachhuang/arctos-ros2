@@ -7,7 +7,17 @@ from launch.conditions import UnlessCondition
 from ament_index_python.packages import get_package_share_directory
 import os
 
-def generate_launch_description():           
+def generate_launch_description(): 
+     # 1. Define the Launch Argument
+    declare_use_fake_hardware = DeclareLaunchArgument(
+        'use_fake_hardware',
+        default_value='false',  # Set the default value (often 'false' for real hardware)
+        description='Set to true to use fake hardware interface (for testing/simulation)'
+    )
+    
+    # 2. Store the argument value in a LaunchConfiguration object
+    use_fake_hardware = LaunchConfiguration('use_fake_hardware')
+              
     urdf_path = os.path.join(
         get_package_share_directory('arctos_description'),
         'urdf',
@@ -29,8 +39,7 @@ def generate_launch_description():
     robot_state_publisher_node = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
-        parameters=[{'robot_description': robot_description_content}],
-        # output='both'
+        parameters=[{'robot_description': robot_description_content}],             
     )
     
     controller_manager_node = Node(
