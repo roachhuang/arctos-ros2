@@ -12,8 +12,11 @@ ros2 run tf2_tools view_frames
     sudo ip link set can0 type can bitrate 500000
     sudo ip link set can0 up
     ip link show
-    cansend can0 001#fd806402000c8070
 
+    candump can0
+    cansend can0 001#fd806402000c8070
+    cansend can0 001#f502580200400092
+    cansend can0 001#f5025802ffc00011
 ---------------------------------------------------------------------------
 STEP 1:
     ros2 run robot_state_publisher robot_state_publisher --ros-args -p robot_description:="$(xacro /home/roach/ros2_ws/src/arctos/arctos_description/urdf/arctos.urdf.xacro)"

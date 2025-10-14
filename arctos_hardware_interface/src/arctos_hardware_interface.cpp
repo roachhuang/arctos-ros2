@@ -44,7 +44,7 @@ namespace arctos_hardware_interface
             }
 
             struct ifreq ifr{};
-            strcpy(ifr.ifr_name, "can0");
+            std::strcpy(ifr.ifr_name, "can0");
             if (ioctl(can_socket_, SIOCGIFINDEX, &ifr) < 0)
             {
                 RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"),
@@ -79,28 +79,6 @@ namespace arctos_hardware_interface
                 servo_list += std::to_string(can_id) + " ";
             }
             RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "%s", servo_list.c_str());
-
-            // Enable all servos
-            for (auto can_id : servo_order_)
-            {
-                can_frame enable_frame;
-                enable_frame.can_id = can_id;
-                enable_frame.can_dlc = 8;
-                enable_frame.data[0] = 0xF3;
-                enable_frame.data[1] = 0x01;
-                enable_frame.data[2] = 0x00;
-                enable_frame.data[3] = 0x00;
-                enable_frame.data[4] = 0x00;
-                enable_frame.data[5] = 0x00;
-                enable_frame.data[6] = 0x00;
-                enable_frame.data[7] = 0xF4;
-
-                RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "Enabling servo CAN_ID=%d", can_id);
-                sendCAN(enable_frame);
-
-                // Small delay between commands
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
         }
         catch (std::exception &e)
         {
@@ -195,12 +173,6 @@ namespace arctos_hardware_interface
     {
         (void)time;
         (void)period;
-
-        if (servo_order_.empty())
-        {
-            RCLCPP_WARN(rclcpp::get_logger("ArctosHardwareInterface"), "servo_order_ is empty in write()");
-            return return_type::OK;
-        }
 
         for (auto can_id : servo_order_)
         {
