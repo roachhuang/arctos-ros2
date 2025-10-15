@@ -15,8 +15,20 @@ ros2 run tf2_tools view_frames
 
     candump can0
     cansend can0 001#fd806402000c8070
+
     cansend can0 001#f502580200400092
     cansend can0 001#f5025802ffc00011
+    stop motor in position mode4:
+        cansend can0 001#01F5000004000000FA
+
+    emergency stop:
+        cansend can0 001#f7f8
+    gohome till hit limit
+        cansend can0 001#9192    
+    read the RAW encoder value(addition):
+        cansend can0 001#3536
+    set current position to 0:
+        cansend can0 001#9293
 ---------------------------------------------------------------------------
 STEP 1:
     ros2 run robot_state_publisher robot_state_publisher --ros-args -p robot_description:="$(xacro /home/roach/ros2_ws/src/arctos/arctos_description/urdf/arctos.urdf.xacro)"
@@ -40,7 +52,9 @@ ros2 run rviz2 rviz2 -d /home/roach/ros2_ws/src/arctos/arctos_description/rviz/d
 
 the above steps 1-3 is equivalent to ros2 launch arctos_bringup arctos.launch.py
 
-step 1-4 is here: ros2 launch arctos_bringup my_moveit.launch.xml use_fake_hardware:=false 
+step 1-4 is here:
+    ros2 launch arctos_bringup my_moveit.launch.py 
+    ros2 launch arctos_bringup my_moveit.launch.xml use_fake_hardware:=false 
 
 add custom msg pkg - arctos_interfaces
     ros2 interface show arctos_interfaces/msg/PoseCommand

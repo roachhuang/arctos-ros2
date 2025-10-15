@@ -2,6 +2,7 @@
 #include <cstring>
 #include <chrono>
 #include <cmath>
+#include <rclcpp/rclcpp.hpp>
 
 // Constructor
 ServoManager::ServoManager(uint8_t id, double ratio)
@@ -77,15 +78,15 @@ struct can_frame ServoManager::absoluteMotion(uint16_t speed, uint8_t accel, uin
 struct can_frame ServoManager::absoluteMotionRad(double angleRad, uint16_t speed, uint8_t accel)
 {
     double motorRad = angleRad * gearRatio;
-    uint32_t encoderValue = static_cast<uint32_t>((motorRad / TWO_PI) * ENCODER_CPR) % ENCODER_CPR;
+    uint32_t encoderValue = static_cast<uint32_t>((motorRad / TWO_PI) * ENCODER_CPR);
     uint8_t data[8]{
         CMD::MOTOR::ABSOLUTE_AXIS,
         static_cast<uint8_t>(speed >> 8),
         static_cast<uint8_t>(speed & 0xFF),
         accel,
-        static_cast<uint8_t>(encoderValue & 0xFF),        // Low byte (bits 0-7)
-        static_cast<uint8_t>((encoderValue >> 8) & 0xFF), // Middle byte (bits 8-15)
         static_cast<uint8_t>((encoderValue >> 16) & 0xFF), // High byte (bits 16-23)        
+        static_cast<uint8_t>((encoderValue >> 8) & 0xFF), // Middle byte (bits 8-15)
+        static_cast<uint8_t>(encoderValue & 0xFF),        // Low byte (bits 0-7)
         0 // crc placeholder
     };
     
@@ -93,6 +94,7 @@ struct can_frame ServoManager::absoluteMotionRad(double angleRad, uint16_t speed
     return pack(data, 8);
 }
 
+// enable the motor
 struct can_frame ServoManager::enableServo(bool on)
 {
     uint8_t data[3]{CMD::CONTROL::ENABLE, static_cast<uint8_t>(on ? 1 : 0), 0};
@@ -166,8 +168,12 @@ ServoManager::ResponseData ServoManager::parseResponse(const struct can_frame &f
     case CMD::READ::ENCODER_ABSOLUTE:
     {
         resp.type = TYPE_ENCODER;
-        uint16_t value = (frame.data[1] << 8) | frame.data[2];
-        updateEncoder(value);
+        RCLCPP_INFO(rclcpp::get_logger("ServoManager"), "Frame data: [%02X %02X %02X %02X %02X %02X %02X %02X]", 
+                   frame.data[0], frame.data[1], frame.data[2], frame.data[3], frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
+        uint64_t value = ((uint64_t)frame.data[1] << 40) | ((uint64_t)frame.data[2] << 32) | ((uint64_t)frame.data[3] << 24) | ((uint64_t)frame.data[4] << 16) | ((uint64_t)frame.data[5] << 8) | frame.data[6];
+        RCLCPP_INFO(rclcpp::get_logger("ServoManager"), "Absolute encoder value: %lu", value);
+        resp.value = (uint32_t)value;
+        updateEncoder((uint32_t)value);
         break;
     }
     case CMD::READ::SPEED:
@@ -202,7 +208,7 @@ double ServoManager::getAbsoluteAngle() const
 
 void ServoManager::setTargetAngle(double rad)
 {
-    targetEncoder = static_cast<uint32_t>((rad * gearRatio / TWO_PI) * ENCODER_CPR) % ENCODER_CPR;
+    targetEncoder = static_cast<uint32_t>((rad * gearRatio / TWO_PI) * ENCODER_CPR);
 }
 
 void ServoManager::updateSpeedFromCAN(int16_t rpm)
