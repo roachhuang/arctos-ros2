@@ -7,6 +7,21 @@
       <!-- <plugin>mock_components/GenericSystem</plugin> -->
       <plugin>arctos_hardware_interface/ArctosHardwareInterface</plugin>
       <param name='can_interface'>can0</param>
+      <param name='gear_ratio_X'>13.5</param>
+      <param name='gear_ratio_Y'>150.0</param>
+      <param name='gear_ratio_Z'>150.0</param>
+      <param name='gear_ratio_A'>48.0</param>
+      <param name='gear_ratio_B'>67.82</param>
+      <param name='gear_ratio_C'>67.82</param>
+      <param name='accel'>10</param> 
+      <param name='speed'>100</param>
+      <param name='can_id_X'>1</param>
+      <param name='can_id_Y'>2</param>
+      <param name='can_id_Z'>3</param>
+      <param name='can_id_A'>4</param>
+      <param name='can_id_B'>5</param>
+      <param name='can_id_C'>6</param>  
+
     </hardware>
     <joint name="X_joint">
         <command_interface name="position"/>

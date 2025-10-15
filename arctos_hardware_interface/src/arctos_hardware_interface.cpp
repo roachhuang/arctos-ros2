@@ -10,7 +10,7 @@ namespace arctos_hardware_interface
 {
     // Lifecycle init
     CallbackReturn ArctosHardwareInterface::on_init(
-        const hardware_interface::HardwareComponentInterfaceParams &/*params*/)
+        const hardware_interface::HardwareComponentInterfaceParams & /*params*/)
     {
         try
         {
@@ -159,15 +159,15 @@ namespace arctos_hardware_interface
 
                 // Use wrapped angle for ROS
                 it->second.current_angle = it->second.manager->getAbsoluteAngle();
-                if(resp.can_id == 1) // only log for CAN ID 1
+                if (resp.can_id == 1) // only log for CAN ID 1
                 {
                     RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
                                 "Read CAN ID=%d: angle=%.3f",
                                 resp.can_id,
                                 it->second.current_angle);
-                                //it->second.current_angle * 180.0 / ServoManager::TWO_PI,
-                                //it->second.manager->getVelocityRadPerSec());
-                }   
+                    // it->second.current_angle * 180.0 / ServoManager::TWO_PI,
+                    // it->second.manager->getVelocityRadPerSec());
+                }
                 it->second.current_velocity = it->second.manager->getVelocityRadPerSec();
                 ++replies_got;
             }
@@ -178,9 +178,8 @@ namespace arctos_hardware_interface
 
     // Write commands to hardware
     return_type ArctosHardwareInterface::write(
-        const rclcpp::Time & /*time*/, const rclcpp::Duration & period)
+        const rclcpp::Time & /*time*/, const rclcpp::Duration &period)
     {
-        
         (void)time;
         (void)period;
 
@@ -191,12 +190,11 @@ namespace arctos_hardware_interface
             wrapper.manager->setTargetAngle(wrapper.target_angle);
             can_frame cmd = wrapper.manager->absoluteMotionRad(wrapper.target_angle, speed_, accel_);
 
-            if (can_id == 1)
-                RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "write cmd: CAN_ID=%d, target=%.3f radians", can_id, wrapper.target_angle);
+            // if (can_id == 1)
+            //     RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "write cmd: CAN_ID=%d, target=%.3f radians", can_id, wrapper.target_angle);
             sendCAN(cmd);
-
         }
-        
+
         return return_type::OK;
     }
 
@@ -210,14 +208,14 @@ namespace arctos_hardware_interface
         }
 
         // Log CAN frame details
-        if (frame.can_id == 1) // only log frames with ID 0x001
-        {
-            RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
-                        "sending CAN: ID=0x%03X, DLC=%d, Data=[%02X %02X %02X %02X %02X %02X %02X %02X]",
-                        frame.can_id, frame.can_dlc,
-                        frame.data[0], frame.data[1], frame.data[2], frame.data[3],
-                        frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
-        }
+        // if (frame.can_id == 1) // only log frames with ID 0x001
+        // {
+        //     RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
+        //                 "sending CAN: ID=0x%03X, DLC=%d, Data=[%02X %02X %02X %02X %02X %02X %02X %02X]",
+        //                 frame.can_id, frame.can_dlc,
+        //                 frame.data[0], frame.data[1], frame.data[2], frame.data[3],
+        //                 frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
+        // }
         ssize_t nbytes = ::write(can_socket_, &frame, sizeof(frame));
         if (nbytes != static_cast<ssize_t>(sizeof(frame)))
         {
