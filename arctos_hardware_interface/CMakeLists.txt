@@ -16,9 +16,8 @@ find_package(PkgConfig REQUIRED)
 include_directories(include)
 
 add_library(${PROJECT_NAME} SHARED
-  # src/robotarm_interface.cpp
-  # src/robotarm_driver.cpp
   src/arctos_hardware_interface.cpp
+  src/can_driver.cpp
   src/ServoManager.cpp
 )
 

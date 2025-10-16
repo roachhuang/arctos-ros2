@@ -1,262 +1,243 @@
 #include "arctos_hardware_interface/arctos_hardware_interface.hpp"
-// #include <pluginlib/class_list_macros.hpp>
-#include <stdexcept>
-#include <chrono>
+#include <algorithm>
 #include <thread>
-#include <sys/ioctl.h>
-#include <cstring>
 
 namespace arctos_hardware_interface
 {
-    // Lifecycle init
-    CallbackReturn ArctosHardwareInterface::on_init(
-        const hardware_interface::HardwareComponentInterfaceParams & /*params*/)
+    ArctosHardwareInterface::ArctosHardwareInterface()
+        : driver_(std::make_unique<CanDriver>()) {}
+
+    ArctosHardwareInterface::~ArctosHardwareInterface()
     {
+        RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "Destructor called");
+        disconnect_hardware();
+    }
+
+    CallbackReturn ArctosHardwareInterface::on_init(const hw::HardwareComponentInterfaceParams &params)
+    {
+        if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
+        {
+            return CallbackReturn::ERROR;
+        }
+
+        // Initialize joint data
+        num_joints_ = info_.joints.size();
+        position_commands_.resize(num_joints_, 0.0);
+        position_states_.resize(num_joints_, 0.0);
+        velocity_states_.resize(num_joints_, 0.0);
+        prev_position_commands_.resize(num_joints_, 0.0);
+
+        RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
+                    "Initialized with %zu joints", num_joints_);
+        return CallbackReturn::SUCCESS;
+    }
+
+    CallbackReturn ArctosHardwareInterface::on_configure(const rclcpp_lifecycle::State &previous_state)
+    {
+        (void)previous_state;
+
         try
         {
-            // Clear old data
-            servo_map_.clear();
-            servo_order_.clear();
-
-            size_t num_motors = info_.joints.size();
-
-            // Initialize ServoManager objects and wrappers
-            for (size_t i = 0; i < num_motors; ++i)
+            std::string can_interface = "can0";
+            // Get CAN interface from parameters if available
+            if (info_.hardware_parameters.find("can_interface") != info_.hardware_parameters.end())
             {
-                uint8_t can_id = static_cast<uint8_t>(i + 1); // CAN IDs 1..6
-                double gear_ratio = 1.0;                      // could be taken from info.hardware_parameters
-                auto manager = std::make_shared<ServoManager>(can_id, gear_ratio);
-
-                ServoWrapper wrapper;
-                wrapper.manager = manager;
-
-                servo_map_[can_id] = wrapper;
-                servo_order_.push_back(can_id);
+                can_interface = info_.hardware_parameters.at("can_interface");
             }
 
-            // --- Initialize CAN socket on can0 ---
-            can_socket_ = socket(PF_CAN, SOCK_RAW, CAN_RAW);
-            if (can_socket_ < 0)
+            if (!driver_->connect(can_interface))
             {
                 RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"),
-                             "Failed to create CAN socket");
+                             "Failed to connect to CAN interface");
                 return CallbackReturn::ERROR;
             }
-
-            struct ifreq ifr{};
-            std::strcpy(ifr.ifr_name, "can0");
-            if (ioctl(can_socket_, SIOCGIFINDEX, &ifr) < 0)
-            {
-                RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"),
-                             "Failed to get CAN interface index for can0");
-                return CallbackReturn::ERROR;
-            }
-
-            struct sockaddr_can addr{};
-            addr.can_family = AF_CAN;
-            addr.can_ifindex = ifr.ifr_ifindex;
-
-            if (bind(can_socket_, (struct sockaddr *)&addr, sizeof(addr)) < 0)
-            {
-                RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"),
-                             "Failed to bind CAN socket to can0");
-                return CallbackReturn::ERROR;
-            }
-
-            // Optional: set non-blocking read timeout (10 ms)
-            struct timeval timeout{};
-            timeout.tv_sec = 0;
-            timeout.tv_usec = 10000;
-            setsockopt(can_socket_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
             RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
-                        "CAN socket successfully initialized on can0. Initialized %zu servos.", servo_order_.size());
-
-            // Log servo_order_ contents
-            std::string servo_list = "Servo order: ";
-            for (auto can_id : servo_order_)
-            {
-                servo_list += std::to_string(can_id) + " ";
-            }
-            RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "%s", servo_list.c_str());
+                        "Connected to CAN interface: %s", can_interface.c_str());
+            return CallbackReturn::SUCCESS;
         }
-        catch (std::exception &e)
+        catch (const std::exception &e)
         {
             RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"),
-                         "Failed to initialize ServoManager: %s", e.what());
+                         "Configuration error: %s", e.what());
             return CallbackReturn::ERROR;
+        }
+    }
+
+    CallbackReturn ArctosHardwareInterface::on_activate(const rclcpp_lifecycle::State &previous_state)
+    {
+        (void)previous_state;
+
+        RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "Activating hardware...");
+
+        if (!driver_ || !driver_->is_connected())
+        {
+            RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"),
+                         "Driver not connected! Cannot activate.");
+            return CallbackReturn::ERROR;
+        }
+
+        if (!driver_->activate())
+        {
+            RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"),
+                         "Failed to activate servos");
+            return CallbackReturn::ERROR;
+        }
+
+        // Read initial positions
+        std::vector<double> initial_positions;
+        if (driver_->read_positions(initial_positions))
+        {
+            for (size_t i = 0; i < num_joints_ && i < initial_positions.size(); ++i)
+            {
+                position_states_[i] = initial_positions[i];
+                position_commands_[i] = initial_positions[i];
+                prev_position_commands_[i] = initial_positions[i];
+            }
         }
 
         return CallbackReturn::SUCCESS;
     }
 
-    // Export state interfaces
-    std::vector<hardware_interface::StateInterface> ArctosHardwareInterface::export_state_interfaces()
+    CallbackReturn ArctosHardwareInterface::on_deactivate(const rclcpp_lifecycle::State &previous_state)
     {
-        std::vector<hardware_interface::StateInterface> state_interfaces;
-        std::vector<std::string> joint_names = {"X_joint", "Y_joint", "Z_joint", "A_joint", "B_joint", "C_joint"};
+        (void)previous_state;
+        RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "Deactivating hardware...");
+        return disconnect_hardware();
+    }
 
-        for (size_t idx = 0; idx < servo_order_.size() && idx < joint_names.size(); ++idx)
+    CallbackReturn ArctosHardwareInterface::on_shutdown(const rclcpp_lifecycle::State &previous_state)
+    {
+        (void)previous_state;
+        RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "Shutting down...");
+        return disconnect_hardware();
+    }
+
+    std::vector<hw::StateInterface> ArctosHardwareInterface::export_state_interfaces()
+    {
+        std::vector<hw::StateInterface> state_interfaces;
+
+        for (size_t i = 0; i < num_joints_; ++i)
         {
-            uint8_t can_id = servo_order_[idx];
-            auto it = servo_map_.find(can_id);
-            if (it == servo_map_.end())
-                continue;
+            state_interfaces.emplace_back(
+                info_.joints[i].name,
+                hw::HW_IF_POSITION,
+                &position_states_[i]);
 
-            state_interfaces.emplace_back(joint_names[idx], "position", &it->second.current_angle);
-            state_interfaces.emplace_back(joint_names[idx], "velocity", &it->second.current_velocity);
+            state_interfaces.emplace_back(
+                info_.joints[i].name,
+                hw::HW_IF_VELOCITY,
+                &velocity_states_[i]);
         }
 
+        RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
+                    "Exported %zu state interfaces", state_interfaces.size());
         return state_interfaces;
     }
 
-    // Export command interfaces
-    std::vector<hardware_interface::CommandInterface> ArctosHardwareInterface::export_command_interfaces()
+    std::vector<hw::CommandInterface> ArctosHardwareInterface::export_command_interfaces()
     {
-        std::vector<hardware_interface::CommandInterface> command_interfaces;
-        std::vector<std::string> joint_names = {"X_joint", "Y_joint", "Z_joint", "A_joint", "B_joint", "C_joint"};
+        std::vector<hw::CommandInterface> command_interfaces;
 
-        for (size_t idx = 0; idx < servo_order_.size(); ++idx)
+        for (size_t i = 0; i < num_joints_; ++i)
         {
-            uint8_t can_id = servo_order_[idx];
-            auto it = servo_map_.find(can_id);
-            if (it == servo_map_.end())
-                continue;
-
-            command_interfaces.emplace_back(joint_names[idx], "position", &it->second.target_angle);
+            command_interfaces.emplace_back(
+                info_.joints[i].name,
+                hw::HW_IF_POSITION,
+                &position_commands_[i]);
         }
 
+        RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
+                    "Exported %zu command interfaces", command_interfaces.size());
         return command_interfaces;
     }
 
-    // Read joint states from hardware
-    return_type ArctosHardwareInterface::read(
-        const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
+    hw::return_type ArctosHardwareInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration &/*period*/)
     {
-        // RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "on read...");
-        // 1. Send read requests to all servos
-        for (auto can_id : servo_order_)
+        if (!driver_ || !driver_->is_connected())
         {
-            auto &wrapper = servo_map_[can_id];
-            can_frame req = wrapper.manager->readEncoderAbsolute();
-            sendCAN(req);
+            return hw::return_type::ERROR;
         }
 
-        // 2. Collect replies for all servos
-        size_t replies_needed = servo_order_.size();
-        size_t replies_got = 0;
+        std::vector<double> positions;
+        driver_->read_positions(position_states_);
 
-        while (replies_got < replies_needed)
+
+        // if (driver_->read_positions(positions))
+        // {
+        //     // Calculate velocity from position change
+        //     double dt = period.seconds();
+        //     for (size_t i = 0; i < num_joints_ && i < positions.size(); ++i)
+        //     {
+        //         double prev_pos = position_states_[i];
+        //         position_states_[i] = positions[i];
+        //         velocity_states_[i] = (dt > 0) ? (position_states_[i] - prev_pos) / dt : 0.0;
+        //     }
+        // }
+
+        return hw::return_type::OK;
+    }
+
+    hw::return_type ArctosHardwareInterface::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
+    {
+        if (!driver_ || !driver_->is_connected())
         {
-            can_frame resp = receiveCAN();
-            if (resp.can_id == 0)
-                break; // timeout or no frame
+            return hw::return_type::ERROR;
+        }
 
-            auto it = servo_map_.find(resp.can_id);
-            if (it != servo_map_.end())
+        // Only send if commands changed significantly
+        bool commands_changed = false;
+        for (size_t i = 0; i < position_commands_.size(); ++i)
+        {
+            if (std::abs(position_commands_[i] - prev_position_commands_[i]) > 0.01)
             {
-                it->second.manager->parseResponse(resp);
-
-                // Use wrapped angle for ROS
-                it->second.current_angle = it->second.manager->getAbsoluteAngle();
-                if (resp.can_id == 1) // only log for CAN ID 1
-                {
-                    RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
-                                "Read CAN ID=%d: angle=%.3f",
-                                resp.can_id,
-                                it->second.current_angle);
-                    // it->second.current_angle * 180.0 / ServoManager::TWO_PI,
-                    // it->second.manager->getVelocityRadPerSec());
-                }
-                it->second.current_velocity = it->second.manager->getVelocityRadPerSec();
-                ++replies_got;
+                commands_changed = true;
+                break;
             }
         }
 
-        return return_type::OK;
-    }
-
-    // Write commands to hardware
-    return_type ArctosHardwareInterface::write(
-        const rclcpp::Time & /*time*/, const rclcpp::Duration &period)
-    {
-        (void)time;
-        (void)period;
-
-        for (auto can_id : servo_order_)
+        if (!commands_changed)
         {
-            auto &wrapper = servo_map_[can_id];
-            // target_angle is in radians!!!
-            wrapper.manager->setTargetAngle(wrapper.target_angle);
-            can_frame cmd = wrapper.manager->absoluteMotionRad(wrapper.target_angle, speed_, accel_);
-
-            // if (can_id == 1)
-            //     RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "write cmd: CAN_ID=%d, target=%.3f radians", can_id, wrapper.target_angle);
-            sendCAN(cmd);
+            return hw::return_type::OK;
         }
 
-        return return_type::OK;
-    }
-
-    // --- CAN read/write ---
-    void ArctosHardwareInterface::sendCAN(const can_frame &frame)
-    {
-        if (can_socket_ < 0)
+        try
         {
-            RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"), "CAN socket not initialized");
-            return;
+            if (driver_->send_commands(position_commands_)) // in radians
+            {
+                prev_position_commands_ = position_commands_;
+            }
         }
-
-        // Log CAN frame details
-        // if (frame.can_id == 1) // only log frames with ID 0x001
-        // {
-        //     RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
-        //                 "sending CAN: ID=0x%03X, DLC=%d, Data=[%02X %02X %02X %02X %02X %02X %02X %02X]",
-        //                 frame.can_id, frame.can_dlc,
-        //                 frame.data[0], frame.data[1], frame.data[2], frame.data[3],
-        //                 frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
-        // }
-        ssize_t nbytes = ::write(can_socket_, &frame, sizeof(frame));
-        if (nbytes != static_cast<ssize_t>(sizeof(frame)))
+        catch (const std::exception &e)
         {
             RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"),
-                         "Failed to send CAN frame: %s", std::strerror(errno));
+                         "Write command failed: %s", e.what());
+            return hw::return_type::ERROR;
         }
-        else
-        {
-            RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "CAN frame sent successfully");
-        }
+
+        return hw::return_type::OK;
     }
 
-    can_frame ArctosHardwareInterface::receiveCAN()
+    CallbackReturn ArctosHardwareInterface::disconnect_hardware()
     {
-        can_frame frame{};
-        if (can_socket_ < 0)
+        if (driver_ && driver_->is_connected())
         {
-            RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"), "CAN socket not initialized");
-            return frame;
-        }
-
-        ssize_t nbytes = ::read(can_socket_, &frame, sizeof(frame));
-        if (nbytes < 0)
-        {
-            if (errno != EAGAIN && errno != EWOULDBLOCK)
+            try
             {
-                RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"),
-                             "Error reading CAN frame: %s", strerror(errno));
+                driver_->deactivate();
+                driver_->disconnect();
             }
-            return frame;
+            catch (const std::exception &e)
+            {
+                RCLCPP_WARN(rclcpp::get_logger("ArctosHardwareInterface"),
+                            "Disconnect error: %s", e.what());
+                return CallbackReturn::ERROR;
+            }
         }
-        else if (nbytes < static_cast<ssize_t>(sizeof(frame)))
-        {
-            RCLCPP_WARN(rclcpp::get_logger("ArctosHardwareInterface"),
-                        "Incomplete CAN frame received");
-        }
-
-        return frame;
+        return CallbackReturn::SUCCESS;
     }
 
 } // namespace arctos_hardware_interface
-// Export plugin
+
 #include "pluginlib/class_list_macros.hpp"
-PLUGINLIB_EXPORT_CLASS(arctos_hardware_interface::ArctosHardwareInterface, hardware_interface::SystemInterface)
+PLUGINLIB_EXPORT_CLASS(arctos_hardware_interface::ArctosHardwareInterface, hw::SystemInterface)

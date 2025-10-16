@@ -2,60 +2,53 @@
 #define ARCTOS_HARDWARE_INTERFACE_HPP
 
 #include <hardware_interface/system_interface.hpp>
-#include <hardware_interface/handle.hpp>
 #include <hardware_interface/types/hardware_interface_return_values.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/state.hpp>
-#include "arctos_hardware_interface/ServoManager.hpp"
+#include "arctos_hardware_interface/can_driver.hpp"
 
-#include <unordered_map>
 #include <vector>
 #include <memory>
 
-using hardware_interface::return_type;
+namespace hw = hardware_interface;
 
 namespace arctos_hardware_interface
 {
   using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
-  class ArctosHardwareInterface : public hardware_interface::SystemInterface
+  class ArctosHardwareInterface : public hw::SystemInterface
   {
   public:
-    // Lifecycle methods
-    CallbackReturn on_init(
-        const hardware_interface::HardwareComponentInterfaceParams &params) override;
-    std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
-    std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
-    return_type read(const rclcpp::Time &time, const rclcpp::Duration &period) override;
-    return_type write(const rclcpp::Time &time, const rclcpp::Duration &period) override;
+    ArctosHardwareInterface();
+    ~ArctosHardwareInterface();
+
+    // SystemInterface overrides
+    CallbackReturn on_init(const hw::HardwareComponentInterfaceParams & params) override;
+    hw::return_type read(const rclcpp::Time &time, const rclcpp::Duration &period) override;
+    hw::return_type write(const rclcpp::Time &time, const rclcpp::Duration &period) override;
+
+    // Lifecycle overrides
+    CallbackReturn on_configure(const rclcpp_lifecycle::State &previous_state) override;
+    CallbackReturn on_activate(const rclcpp_lifecycle::State &previous_state) override;
+    CallbackReturn on_deactivate(const rclcpp_lifecycle::State &previous_state) override;
+    CallbackReturn on_shutdown(const rclcpp_lifecycle::State &previous_state) override;
+
+    std::vector<hw::StateInterface> export_state_interfaces() override;
+    std::vector<hw::CommandInterface> export_command_interfaces() override;
 
   private:
-    // Wrapper for each servo's data
-    struct ServoWrapper
-    {
-      std::shared_ptr<ServoManager> manager;
-      double current_angle{0.0};
-      double current_velocity{0.0};
-      double target_angle{0.0};
-      double target_velocity{0.0};
-    };
+    std::unique_ptr<CanDriver> driver_;
+    std::size_t num_joints_;
 
-    // Map CAN IDs to servo data
-    std::unordered_map<uint8_t, ServoWrapper> servo_map_;
+    // Joint data
+    std::vector<double> position_commands_;
+    std::vector<double> position_states_;
+    std::vector<double> velocity_states_;
+    std::vector<double> prev_position_commands_;
 
-    // Keep a consistent ordering of joints (so state/command interfaces align)
-    std::vector<uint8_t> servo_order_;
+    // Joint configuration is read from URDF via info_.joints
 
-    // Motion defaults
-    double speed_ = 100; // default speed for all motors
-    uint8_t accel_ = 10; // default acceleration for all motors
-
-    // CAN socket
-    int can_socket_ = -1;
-
-    // Simulated CAN read/write functions
-    can_frame receiveCAN();
-    void sendCAN(const can_frame &frame);
+    CallbackReturn disconnect_hardware();
   };
 
 } // namespace arctos_hardware_interface

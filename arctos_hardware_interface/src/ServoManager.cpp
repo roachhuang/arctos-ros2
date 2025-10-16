@@ -75,6 +75,7 @@ struct can_frame ServoManager::absoluteMotion(uint16_t speed, uint8_t accel, uin
     return pack(data, 6);
 }
 
+// compose absolute motion command frame in encoder counts for sending.
 struct can_frame ServoManager::absoluteMotionRad(double angleRad, uint16_t speed, uint8_t accel)
 {
     double motorRad = angleRad * gearRatio;
@@ -109,7 +110,7 @@ struct can_frame ServoManager::stopMotor()
     return pack(data, 2);
 }
 
-// --- Read commands ---
+// --- Read commands 31 ---
 struct can_frame ServoManager::readEncoderAbsolute()
 {
     uint8_t val = CMD::READ::ENCODER_ABSOLUTE;
@@ -165,13 +166,19 @@ ServoManager::ResponseData ServoManager::parseResponse(const struct can_frame &f
         updateEncoder(combined);
         break;
     }
+    
     case CMD::READ::ENCODER_ABSOLUTE:
     {
         resp.type = TYPE_ENCODER;
+        
         RCLCPP_INFO(rclcpp::get_logger("ServoManager"), "Frame data: [%02X %02X %02X %02X %02X %02X %02X %02X]", 
                    frame.data[0], frame.data[1], frame.data[2], frame.data[3], frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
+
+        // Extract 6-byte encoder counter value from data[1] to data[6]
         uint64_t value = ((uint64_t)frame.data[1] << 40) | ((uint64_t)frame.data[2] << 32) | ((uint64_t)frame.data[3] << 24) | ((uint64_t)frame.data[4] << 16) | ((uint64_t)frame.data[5] << 8) | frame.data[6];
+        
         RCLCPP_INFO(rclcpp::get_logger("ServoManager"), "Absolute encoder value: %lu", value);
+
         resp.value = (uint32_t)value;
         updateEncoder((uint32_t)value);
         break;
@@ -191,7 +198,8 @@ ServoManager::ResponseData ServoManager::parseResponse(const struct can_frame &f
     return resp;
 }
 
-// --- Encoder update ---
+// tod: fix this coz we already have updateEncoder above. why bother accumulating again?
+// convert encoder counts to radians
 void ServoManager::updateEncoder(uint32_t rawValue)
 {
     int32_t delta = int32_t(rawValue) - int32_t(lastEncoder);
