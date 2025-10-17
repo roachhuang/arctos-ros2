@@ -38,7 +38,10 @@ namespace arctos_hardware_interface
 
         try
         {
-            std::string can_interface = "can0";
+            std::string can_interface = info_.hardware_parameters["can_interface"];
+            vel_ = std::stod(info_.hardware_parameters["vel"]);
+            accel_ = std::stod(info_.hardware_parameters["accel"]);
+
             // Get CAN interface from parameters if available
             if (info_.hardware_parameters.find("can_interface") != info_.hardware_parameters.end())
             {
@@ -152,28 +155,24 @@ namespace arctos_hardware_interface
         return command_interfaces;
     }
 
-    hw::return_type ArctosHardwareInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration &/*period*/)
+    hw::return_type ArctosHardwareInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration &period)
     {
         if (!driver_ || !driver_->is_connected())
         {
             return hw::return_type::ERROR;
         }
 
-        std::vector<double> positions;
-        driver_->read_positions(position_states_);
+        std::vector<double> hw_positions;
+        driver_->read_positions(hw_positions);
 
-
-        // if (driver_->read_positions(positions))
-        // {
-        //     // Calculate velocity from position change
-        //     double dt = period.seconds();
-        //     for (size_t i = 0; i < num_joints_; ++i)
-        //     {
-        //         double prev_pos = position_states_[i];
-        //         position_states_[i] = positions[i];
-        //         velocity_states_[i] = (dt > 0) ? (position_states_[i] - prev_pos) / dt : 0.0;
-        //     }
-        // }
+        // Calculate velocity from position change
+        double dt = period.seconds();
+        for (size_t i = 0; i < num_joints_; ++i)
+        {
+            double prev_pos = position_states_[i];
+            position_states_[i] = hw_positions[i];
+            velocity_states_[i] = (dt > 0) ? (position_states_[i] - prev_pos) / dt : 0.0;
+        }
 
         return hw::return_type::OK;
     }
@@ -203,7 +202,7 @@ namespace arctos_hardware_interface
 
         try
         {
-            if (driver_->send_commands(position_commands_)) // in radians
+            if (driver_->send_commands(position_commands_, vel_, accel_)) // in radians
             {
                 prev_position_commands_ = position_commands_;
             }

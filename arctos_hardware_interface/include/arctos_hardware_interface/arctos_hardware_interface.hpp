@@ -39,6 +39,8 @@ namespace arctos_hardware_interface
   private:
     std::unique_ptr<CanDriver> driver_;
     std::size_t num_joints_;
+    uint16_t vel_;
+    uint8_t accel_;
 
     // Joint data
     std::vector<double> position_commands_;

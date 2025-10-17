@@ -8,13 +8,14 @@
 
 namespace arctos_hardware_interface
 {
+    const double gearRatios_[6] = {13.5, 150, 150, 48, 67.82, 67.82};
 
     CanDriver::CanDriver() : can_socket_(-1), connected_(false)
     {
         servos_.reserve(can_ids_.size());
-        for (uint8_t id : can_ids_)
+        for (size_t i=0; i < can_ids_.size(); i++)
         {
-            servos_.emplace_back(id, 1.0);
+            servos_.emplace_back(can_ids_[i], gearRatios_[i]);
         }
     }
 
@@ -75,14 +76,14 @@ namespace arctos_hardware_interface
         return connected_ && can_socket_ >= 0;
     }
 
-    bool CanDriver::send_commands(const std::vector<double> &joint_positions)
+    bool CanDriver::send_commands(const std::vector<double> &joint_positions, uint16_t vel, uint8_t accel)
     {
         if (!is_connected() || joint_positions.size() != servos_.size())
             return false;
 
         for (size_t i = 0; i < servos_.size(); ++i)
         {
-            can_frame cmd = servos_[i].absoluteMotionRad(joint_positions[i], 100, 10);
+            can_frame cmd = servos_[i].absoluteMotionRad(joint_positions[i], vel, accel);
             if (!safe_send_can(cmd))
                 return false;
         }

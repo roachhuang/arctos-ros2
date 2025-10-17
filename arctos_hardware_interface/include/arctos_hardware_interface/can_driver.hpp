@@ -20,7 +20,7 @@ public:
     void disconnect();
     bool is_connected() const;
 
-    bool send_commands(const std::vector<double>& joint_positions);
+    bool send_commands(const std::vector<double>& joint_positions, uint16_t vel = 100, uint8_t acc = 10);
     bool read_positions(std::vector<double>& joint_positions);
     bool activate();
     bool deactivate();

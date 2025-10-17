@@ -14,7 +14,7 @@
       <param name='gear_ratio_B'>67.82</param>
       <param name='gear_ratio_C'>67.82</param>
       <param name='accel'>10</param> 
-      <param name='speed'>100</param>
+      <param name='vel'>100</param>
       <param name='can_id_X'>1</param>
       <param name='can_id_Y'>2</param>
       <param name='can_id_Z'>3</param>
