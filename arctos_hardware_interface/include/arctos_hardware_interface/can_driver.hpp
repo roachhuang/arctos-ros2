@@ -32,7 +32,7 @@ private:
     std::vector<ServoManager> servos_;
     std::vector<uint8_t> can_ids_{1, 2, 3, 4, 5, 6};
 
-    void safe_send_can(const can_frame& frame);
+    bool safe_send_can(const can_frame& frame);
     can_frame safe_receive_can();
     bool initialize_servos();
 };

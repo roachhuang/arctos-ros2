@@ -167,7 +167,7 @@ namespace arctos_hardware_interface
         // {
         //     // Calculate velocity from position change
         //     double dt = period.seconds();
-        //     for (size_t i = 0; i < num_joints_ && i < positions.size(); ++i)
+        //     for (size_t i = 0; i < num_joints_; ++i)
         //     {
         //         double prev_pos = position_states_[i];
         //         position_states_[i] = positions[i];
