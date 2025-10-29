@@ -13,7 +13,7 @@ namespace arctos_hardware_interface
     CanDriver::CanDriver() : can_socket_(-1), connected_(false)
     {
         servos_.reserve(can_ids_.size());
-        for (size_t i=0; i < can_ids_.size(); i++)
+        for (size_t i = 0; i < can_ids_.size(); i++)
         {
             servos_.emplace_back(can_ids_[i], gearRatios_[i]);
         }
@@ -75,6 +75,17 @@ namespace arctos_hardware_interface
     {
         return connected_ && can_socket_ >= 0;
     }
+
+   
+
+    // Helper: little-endian serialize
+    template <typename T>
+    void serialize(std::vector<uint8_t> &v, T val)
+    {
+        for (size_t i = 0; i < sizeof(T); ++i)
+            v.push_back(static_cast<uint8_t>(val >> (i * 8)));
+    }
+
 
     bool CanDriver::send_commands(const std::vector<double> &joint_positions, uint16_t vel, uint8_t accel)
     {

@@ -1,3 +1,20 @@
+nmap -sP 192.168.1.0/24 | awk '/^Nmap/{ip=$NF}/B8:27:EB/{print ip}
+# On Pi, improve WiFi stability
+sudo nano /etc/dhcpcd.conf
+# Add:
+interface wlan0
+metric 302  # Prefer WiFi over other interfaces
+
+sudo nano /etc/wpa_supplicant/wpa_supplicant.conf
+# Add:
+ap_scan=1
+country=US  # Your country code
+# Stop unnecessary services during prints
+sudo systemctl stop bluetooth
+sudo systemctl stop avahi-daemon  # If not needed
+
+
+
 colcon build --base-paths ~/ros2_ws/src/arctos
 OR
 colcon build --packages-select arctos_description --cmake-clean-cache
@@ -53,7 +70,7 @@ ros2 run rviz2 rviz2 -d /home/roach/ros2_ws/src/arctos/arctos_description/rviz/d
 the above steps 1-3 is equivalent to ros2 launch arctos_bringup arctos.launch.py
 
 step 1-4 is here:
-    ros2 launch arctos_bringup my_moveit.launch.py 
+    ros2 launch arctos_bringup my_moveit.launch.py |grep Arctos
     ros2 launch arctos_bringup my_moveit.launch.xml use_fake_hardware:=false 
 
 add custom msg pkg - arctos_interfaces

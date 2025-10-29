@@ -76,7 +76,7 @@ can_frame ServoManager::enableServo(bool on)
 
 can_frame ServoManager::stopMotor()
 {
-    uint8_t data[2] = {CMD::MOTOR::STOP, 0};
+    uint8_t data[2] = {CMD::MOTOR::EMERGENCY_STOP, 0};
     data[1] = checksum(data, 1);
     return pack(data, 2);
 }

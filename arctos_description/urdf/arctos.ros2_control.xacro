@@ -1,64 +1,39 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
    
+  <xacro:macro name="arctos_joint" params="name can_id gear_ratio">
+    <joint name="${name}">
+      <param name='can_id'>${can_id}</param>
+      <param name='gear_ratio'>${gear_ratio}</param>
+      
+      <command_interface name="position"/>
+      
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <!-- <state_interface name="effort">
+        <param name="initial_value">0.0</param>
+      </state_interface> -->
+    </joint>
+  </xacro:macro>
+
   <ros2_control name="arm" type="system">
     <hardware>
-      <!-- By default, set up controllers for simulation. This won't work on real hardware -->
-      <!-- <plugin>mock_components/GenericSystem</plugin> -->
       <plugin>arctos_hardware_interface/ArctosHardwareInterface</plugin>
       <param name='can_interface'>can0</param>
-      <param name='gear_ratio_X'>13.5</param>
-      <param name='gear_ratio_Y'>150.0</param>
-      <param name='gear_ratio_Z'>150.0</param>
-      <param name='gear_ratio_A'>48.0</param>
-      <param name='gear_ratio_B'>67.82</param>
-      <param name='gear_ratio_C'>67.82</param>
       <param name='accel'>10</param> 
       <param name='vel'>100</param>
-      <param name='can_id_X'>1</param>
-      <param name='can_id_Y'>2</param>
-      <param name='can_id_Z'>3</param>
-      <param name='can_id_A'>4</param>
-      <param name='can_id_B'>5</param>
-      <param name='can_id_C'>6</param>  
-
     </hardware>
-    <joint name="X_joint">
-        <command_interface name="position"/>
-        <state_interface name="position">
-          <param name="initial_value">0.0</param>
-        </state_interface>
-    </joint>
-    <joint name="Y_joint">
-        <command_interface name="position"/>
-        <state_interface name="position">
-          <param name="initial_value">0.0</param>
-        </state_interface>
-    </joint>
-    <joint name="Z_joint">
-        <command_interface name="position"/>
-        <state_interface name="position">
-          <param name="initial_value">0.0</param>
-        </state_interface>
-    </joint>
-    <joint name="A_joint">
-        <command_interface name="position"/>
-        <state_interface name="position">
-          <param name="initial_value">0.0</param>
-        </state_interface>
-    </joint>
-    <joint name="B_joint">
-        <command_interface name="position"/>
-        <state_interface name="position">
-          <param name="initial_value">0.0</param>
-        </state_interface>
-    </joint>
-    <joint name="C_joint">
-        <command_interface name="position"/>
-        <state_interface name="position">
-          <param name="initial_value">0.0</param>
-        </state_interface>
-    </joint>
+    
+    <xacro:arctos_joint name="X_joint" can_id="1" gear_ratio="13.5"/>
+    <xacro:arctos_joint name="Y_joint" can_id="2" gear_ratio="150.0"/>
+    <xacro:arctos_joint name="Z_joint" can_id="3" gear_ratio="150.0"/>
+    <xacro:arctos_joint name="A_joint" can_id="4" gear_ratio="48.0"/>
+    <xacro:arctos_joint name="B_joint" can_id="5" gear_ratio="67.82"/>
+    <xacro:arctos_joint name="C_joint" can_id="6" gear_ratio="67.82"/>   
   </ros2_control>
 
   <ros2_control name="gripper" type="system">
@@ -71,7 +46,6 @@
         <param name="initial_value">0.0</param>
       </state_interface>
     </joint>
-
   </ros2_control>
-    
-</robot>
+
+  </robot>

@@ -17,8 +17,9 @@ include_directories(include)
 
 add_library(${PROJECT_NAME} SHARED
   src/arctos_hardware_interface.cpp
-  src/can_driver.cpp
-  src/ServoManager.cpp
+  #src/can_driver.cpp
+  #src/ServoManager.cpp
+  include/arctos_hardware_interface/servo_can.hpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
