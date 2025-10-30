@@ -58,6 +58,9 @@ namespace arctos_hardware_interface
     std::vector<double> position_commands_;
     std::vector<double> prev_position_commands_;
 
+    uint32_t lastEncoder = 0;
+    int64_t accumulatedCounts = 0;
+    double accumulatedAngle = 0.0;
     // Joint configuration is read from URDF via info_.joints
     // Conversion constants (adjust per your motor setup)
     // const double count_to_rad_ = (2.0 * M_PI) / ENCODER_CPR;

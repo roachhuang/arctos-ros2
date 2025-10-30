@@ -20,6 +20,7 @@
 #include <linux/can/raw.h>
 #include <net/if.h>
 #include <sys/select.h>
+#include <rclcpp/rclcpp.hpp>
 
 class ServoCanSimple
 {
@@ -32,7 +33,7 @@ public:
     sock_ = socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (sock_ < 0)
     {
-      std::cerr << "[ServoCAN] Error: fail to create socket." << std::endl;
+      RCLCPP_ERROR(rclcpp::get_logger("ServoCanSimple"), "Failed to create CAN socket");
       return false;
     }
 
@@ -40,7 +41,10 @@ public:
     std::strcpy(ifr.ifr_name, can_interface.c_str());
     if (ioctl(sock_, SIOCGIFINDEX, &ifr) < 0)
     {
-      throw std::runtime_error("CAN iface not found: " + can_interface);
+      RCLCPP_ERROR(rclcpp::get_logger("ServoCanSimple"), "CAN interface not found: %s", can_interface.c_str());
+      close(sock_);
+      sock_ = -1;
+      return false;
     }
 
     struct sockaddr_can addr{};
@@ -48,12 +52,15 @@ public:
     addr.can_ifindex = ifr.ifr_ifindex;
     if (bind(sock_, (struct sockaddr *)&addr, sizeof(addr)) < 0)
     {
-      throw std::runtime_error("SocketCAN bind failed");
+      RCLCPP_ERROR(rclcpp::get_logger("ServoCanSimple"), "Failed to bind CAN socket");
+      close(sock_);
+      sock_ = -1;
+      return false;
     }
 
     struct timeval timeout{0, 10000};
     setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    // RCLCPP_INFO(rclcpp::get_logger("CanDriver"), "Connected to CAN: %s", can_interface.c_str());
+    RCLCPP_INFO(rclcpp::get_logger("ServoCanSimple"), "Connected to CAN: %s", can_interface.c_str());
     return true;
   }
 
@@ -62,7 +69,7 @@ public:
                const std::vector<uint8_t> &params = {},
                bool expect_resp = false,
                std::vector<uint8_t> *out_resp = nullptr,
-               int timeout_ms = 100)
+               int timeout_ms = 10)
   {
     if (can_id > 0x7FF)
       throw std::invalid_argument("CAN ID > 0x7FF");
@@ -122,18 +129,26 @@ public:
     return true;
   }
 
-  std::optional<std::pair<int32_t, uint16_t>> readEncoder(uint16_t id)
-  {
-    std::vector<uint8_t> r;
-    if (!sendCmd(id, 0x30, {}, true, &r))
-      return std::nullopt;
-    if (r.size() < 1 + 4 + 2)
-      return std::nullopt;
-    const uint8_t *p = &r[1];
-    int32_t carry = toI32(p);
-    uint16_t val = toU16(p + 4);
-    return std::make_pair(carry, val);
-  }
+  // uint64_t readEncoder(uint16_t id)
+  // // std::optional<std::pair<int32_t, uint16_t>> readEncoder(uint16_t id)
+  // {
+  //   std::vector<uint8_t> r;
+  //   if (!sendCmd(id, 0x31, {}, true, &r))
+  //     return 0;
+  //   // return std::nullopt;
+
+  //   if (r.size() < 1 + 4 + 2)
+  //     return 0;
+  //   // return std::nullopt;
+
+  //   const uint8_t *p = &r[1];
+  //   uint64_t value = ((uint64_t)p[1] << 40) | ((uint64_t)p[2] << 32) | ((uint64_t)p[3] << 24) | ((uint64_t)p[4] << 16) | ((uint64_t)p[5] << 8) | p[6];
+  //   return value;
+
+  //   // int32_t carry = toI32(p);
+  //   // uint16_t val = toU16(p + 4);
+  //   // return std::make_pair(carry, val);
+  // }
 
   std::optional<int16_t> readSpeed(uint16_t id)
   {
@@ -158,8 +173,7 @@ public:
   // abs motion by axis counts (24-bit)
   bool runPositionAbs(uint16_t id, uint16_t speed, uint8_t accel, int32_t pos24)
   {
-    if (speed > 3000)
-      speed = 3000;
+
     // std::vector<uint8_t> p{
     //     uint8_t(speed & 0xFF),
     //     acc,
@@ -167,12 +181,12 @@ public:
     //     uint8_t((pos24 >> 8) & 0xFF),
     //     uint8_t((pos24 >> 16) & 0xFF)};
     std::vector<uint8_t> p{
-        uint8_t(speed >> 8),
-        uint8_t(speed & 0xff),
+        uint8_t(speed >> 8),   // LSB
+        uint8_t(speed & 0xff), // MSB
         accel,
-        uint8_t((pos24 >> 16) & 0xFF),
-        uint8_t((pos24 >> 8) & 0xFF),
-        uint8_t(pos24 & 0xFF)};
+        uint8_t((pos24 >> 16) & 0xff), // byte5 - MSB
+        uint8_t((pos24 >> 8) & 0xff),
+        uint8_t(pos24 & 0xff)};
     return sendSimple(id, 0xF5, p);
   }
 
@@ -201,6 +215,25 @@ public:
     sock_ = -1;
   }
 
+  // fns for read and wirte methods in ros2 h/w interface
+  std::optional<int64_t> readAbsolutePosition(uint16_t id)
+  {
+    std::vector<uint8_t> r;
+    // Command 0x31 expects a response
+    if (!sendCmd(id, 0x31, {}, true, &r))
+      return std::nullopt;
+
+    // Response should be: 1 byte code (0x31) + 6 bytes data = 7 bytes total
+    if (r.size() < 7)
+      return std::nullopt;
+
+    // The 6 data bytes start at index r[1]
+    const uint8_t *p = &r[1];
+
+    // Convert the 6 bytes into a 64-bit signed position
+    return toI48(p);
+  }
+
 private:
   int sock_{-1};
 
@@ -222,6 +255,34 @@ private:
   static int16_t toI16(const uint8_t *p) { return int16_t(p[0] | (p[1] << 8)); }
   static uint16_t toU16(const uint8_t *p) { return uint16_t(p[0] | (p[1] << 8)); }
   static int32_t toI32(const uint8_t *p) { return int32_t(p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24)); }
+
+  static int64_t toI48(const uint8_t *p)
+  {
+    // 1. Assemble the 6 bytes into a 64-bit unsigned integer (Big Endian)
+    // p[0] is the MSB (at bit 40), p[5] is the LSB (at bit 0)
+    uint64_t raw_value = (uint64_t)p[0] << 40 | // Byte 2 (MSB, bits 0-7)
+                         (uint64_t)p[1] << 32 | // Byte 3
+                         (uint64_t)p[2] << 24 | // Byte 4
+                         (uint64_t)p[3] << 16 | // Byte 5
+                         (uint64_t)p[4] << 8 |  // Byte 6
+                         (uint64_t)p[5];        // Byte 0 (LSB, bits 0-7)
+
+    // 2. Perform 48-bit Sign Extension
+    // Check if the 48th bit (bit 47, which is the sign bit) is set.
+    // Mask: 0x0000800000000000ULL (This bit is now bit 47, but since p[0] is shifted by 40, we only need to check the highest bit of the resulting 48-bit value)
+
+    // The mask for the 48th bit (bit 47) is: 0x0000800000000000ULL
+    // Check if the value is negative (sign bit set)
+    if (raw_value & 0x0000800000000000ULL)
+    {
+      // If negative, fill the upper 16 bits (bits 48-63) with 1s.
+      // Mask: 0xFFFF000000000000ULL
+      raw_value |= 0xFFFF000000000000ULL;
+    }
+
+    // 3. Return the result as a signed 64-bit integer
+    return (int64_t)raw_value;
+  }
 
   bool readFrame(struct can_frame &rx, int timeout_ms)
   {

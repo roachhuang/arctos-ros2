@@ -32,16 +32,16 @@ can_frame ServoManager::runMotorSpeedMode(uint8_t dir, uint16_t speed, uint8_t)
     return pack(data, 5);
 }
 
-can_frame ServoManager::absoluteMotion(uint16_t speed, uint8_t accel, uint32_t position)
+can_frame ServoManager::absoluteMotion(uint16_t speed, uint8_t accel, uint32_t pos24)
 {
     uint8_t data[8] = {
         CMD::MOTOR::ABSOLUTE_AXIS,
         static_cast<uint8_t>(speed >> 8),
         static_cast<uint8_t>(speed & 0xFF),
         accel,
-        static_cast<uint8_t>(position & 0xFF),
-        static_cast<uint8_t>((position >> 8) & 0xFF),
-        static_cast<uint8_t>((position >> 16) & 0xFF),
+        static_cast<uint8_t>(pos24 & 0xFF),
+        static_cast<uint8_t>((pos24 >> 8) & 0xFF),
+        static_cast<uint8_t>((pos24 >> 16) & 0xFF),
         0
     };
     data[7] = checksum(data, 7);
