@@ -1,15 +1,13 @@
 # This config file is used by ros2_control
 controller_manager:
   ros__parameters:
-    update_rate: 5  # Hz
+    update_rate: 20  # Hz - Reduced to prevent overruns with 404ms CAN read time
 
     arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
-
     gripper_controller:
       type: joint_trajectory_controller/JointTrajectoryController
-
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
