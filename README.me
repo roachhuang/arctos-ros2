@@ -111,6 +111,8 @@ cd ~/ros2_ws
 colcon build --base-paths ~/ros2_ws/src/arctos
 // colcon build --symlink-install
 source ~/ros2_ws/install/setup.bash
+canup
+ros2 launch arctos_bringup my_moveit.launch.py
 
 sh -x src/arctos/bringup/scripts/realbot.sh
 

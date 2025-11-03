@@ -9,6 +9,9 @@
 
 #include <vector>
 #include <memory>
+#include <thread>
+#include <atomic>
+#include <cmath>
 
 namespace hw = hardware_interface;
 
@@ -72,11 +75,13 @@ namespace arctos_hardware_interface
     // Conversion utilities
     inline double countsToRadians(int64_t counts, double gear_ratio) const
     {
+        if (std::abs(gear_ratio) < 1e-9) return 0.0;  // Prevent division by near-zero
         return static_cast<double>(counts) / ENCODER_CPR * TWO_PI / gear_ratio;
     }
     
     inline int32_t radiansToCount(double radians, double gear_ratio) const
     {
+        if (std::abs(gear_ratio) < 1e-9) return 0;  // Prevent division by near-zero
         return static_cast<int32_t>(radians * gear_ratio / TWO_PI * ENCODER_CPR);
     }
   };
