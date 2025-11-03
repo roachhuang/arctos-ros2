@@ -10,7 +10,7 @@ namespace arctos_hardware_interface
 
     CallbackReturn ArctosHardwareInterface::on_init(const hw::HardwareComponentInterfaceParams &params)
     {
-        can_driver_ = std::make_unique<ServoCanSimple>();
+        // can_driver_ = std::make_unique<ServoCanSimple>();
         if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
         {
             return CallbackReturn::ERROR;
@@ -79,7 +79,7 @@ namespace arctos_hardware_interface
 
     bool ArctosHardwareInterface::connectToCanInterface()
     {
-        if (can_driver_->connect(can_interface_))
+        if (can_driver_.connect(can_interface_))
         {
             RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
                         "Connected to CAN interface: %s", can_interface_.c_str());
@@ -96,46 +96,46 @@ namespace arctos_hardware_interface
         (void)previous_state;
         RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "Activating hardware...");
 
-        readInitialPositions();
+        // readInitialPositions();
         return CallbackReturn::SUCCESS;
     }
 
-    void ArctosHardwareInterface::readInitialPositions()
-    {
-        // TODO: Read all joints when all motors are installed
-        const size_t active_joints = std::min(num_joints_, size_t(2));
+    // void ArctosHardwareInterface::readInitialPositions()
+    // {
+    //     // TODO: Read all joints when all motors are installed
+    //     const size_t active_joints = std::min(num_joints_, size_t(2));
 
-        for (size_t i = 0; i < active_joints; ++i)
-        {
-            auto position_counts = can_driver_->readAbsolutePosition(can_ids_[i]);
-            if (position_counts.has_value())
-            {
-                double pos = countsToRadians(position_counts.value(), gear_ratios_[i]);
-                pos = std::fmod(pos + M_PI, 2.0 * M_PI) - M_PI; // Normalize
-                position_states_[i] = pos;
-                position_commands_[i] = pos; // Initialize commands to current position
-            }
-            else
-            {
-                // Initialize to zero if CAN read fails
-                position_states_[i] = 0.0;
-                position_commands_[i] = 0.0;
-            }
-        }
+    //     for (size_t i = 0; i < active_joints; ++i)
+    //     {
+    //         auto position_counts = can_driver_.readAbsolutePosition(can_ids_[i]);
+    //         if (position_counts.has_value())
+    //         {
+    //             double pos = countsToRadians(position_counts.value(), gear_ratios_[i]);
+    //             pos = std::fmod(pos + M_PI, 2.0 * M_PI) - M_PI; // Normalize
+    //             position_states_[i] = pos;
+    //             position_commands_[i] = pos; // Initialize commands to current position
+    //         }
+    //         else
+    //         {
+    //             // Initialize to zero if CAN read fails
+    //             position_states_[i] = 0.0;
+    //             position_commands_[i] = 0.0;
+    //         }
+    //     }
 
-        // Initialize inactive joints
-        for (size_t i = active_joints; i < num_joints_; ++i)
-        {
-            position_states_[i] = 0.0;
-            position_commands_[i] = 0.0;
-        }
-    }
+    //     // Initialize inactive joints
+    //     for (size_t i = active_joints; i < num_joints_; ++i)
+    //     {
+    //         position_states_[i] = 0.0;
+    //         position_commands_[i] = 0.0;
+    //     }
+    // }
 
     CallbackReturn ArctosHardwareInterface::on_deactivate(const rclcpp_lifecycle::State &previous_state)
     {
         (void)previous_state;
         RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"), "Deactivating hardware...");
-        can_driver_->deactive();
+        can_driver_.deactive();
         return CallbackReturn::SUCCESS;
     }
 
@@ -180,44 +180,38 @@ namespace arctos_hardware_interface
 
     hw::return_type ArctosHardwareInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration &period)
     {
-        double dt = period.seconds();
-        std::vector<can_frame> frames;
-        for (const auto &can_id : can_ids_)
-        {
-            can_driver_->sendCmd(can_id, 0x31, {});
-        }
+        //     position_states_ = position_commands_;
+        //     return hardware_interface::return_type::OK;
 
-        // Read all available CAN frames (non-blocking)
-        if (can_driver_->readAllAvailable(frames))
+        double dt = period.seconds();
+        auto positions = can_driver_.getPositions();
+        RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
+                    "Exported %zu postions", positions.size());
+
+        // Use actual number of joints, not hardcoded 6
+        for (size_t i = 0; i < num_joints_ && i < positions.size(); ++i)
         {
-            for (const auto &frame : frames)
+            double prev = position_states_[i];
+            double rad = countsToRadians(positions[i], gear_ratios_[i]);
+            rad = std::fmod(rad + M_PI, 2.0 * M_PI) - M_PI;
+            position_states_[i] = rad;
+
+            // Calculate velocity with proper bounds checking
+            if (dt > VELOCITY_EPSILON)
             {
-                // Find joint index for this CAN ID
-                auto it = std::find(can_ids_.begin(), can_ids_.end(), frame.can_id);
-                if (it == can_ids_.end()) {
-                    continue;  // Skip unknown CAN IDs
-                }
-                
-                size_t joint_index = std::distance(can_ids_.begin(), it);
-                double prev_position = position_states_[joint_index];
-                
-                auto encoder_cnt = can_driver_->processCanFrame(frame);
-                if (encoder_cnt.has_value())
-                {
-                    double rad = countsToRadians(encoder_cnt.value(), gear_ratios_[joint_index]);
-                    rad = std::fmod(rad + M_PI, 2.0 * M_PI) - M_PI;
-                    position_states_[joint_index] = rad;
-                }
-                
-                updateJointVelocity(joint_index, prev_position, dt);
+                velocity_states_[i] = (rad - prev) / dt;
+            }
+            else
+            {
+                velocity_states_[i] = 0.0;
             }
         }
-        
-        // For joints without CAN updates, maintain previous velocity calculation
-        for (size_t i = 0; i < num_joints_; ++i) {
-            // Velocity will decay naturally through EMA if no updates
+        // initialize inactive joints
+        for (size_t i = positions.size(); i < num_joints_; ++i)
+        {
+            position_states_[i] = 0.0;
+            velocity_states_[i] = 0.0;
         }
-
         return hardware_interface::return_type::OK;
     }
 
@@ -240,23 +234,21 @@ namespace arctos_hardware_interface
 
     hw::return_type ArctosHardwareInterface::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
     {
-        if (!hasCommandsChanged())
+        if (hasCommandsChanged())
         {
-            return hw::return_type::OK;
-        }
-
-        try
-        {
-            sendPositionCommands();
+            // sendPositionCommands();
             prev_position_commands_ = position_commands_;
-            return hw::return_type::OK;
+
+            for (size_t i = 0; i < num_joints_; ++i)
+            {
+                if (i < can_ids_.size() && i < gear_ratios_.size())
+                {
+                    int32_t target_pos = radiansToCounts(position_commands_[i], gear_ratios_[i]);
+                    can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
+                }
+            }
         }
-        catch (const std::exception &e)
-        {
-            RCLCPP_ERROR(rclcpp::get_logger("ArctosHardwareInterface"),
-                         "Write command failed: %s", e.what());
-            return hw::return_type::ERROR;
-        }
+        return hardware_interface::return_type::OK;
     }
 
     bool ArctosHardwareInterface::hasCommandsChanged() const
@@ -271,22 +263,22 @@ namespace arctos_hardware_interface
         return false;
     }
 
-    void ArctosHardwareInterface::sendPositionCommands()
-    {
-        static size_t cmd_counter = 0;
-        RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
-                    "=== TRAJECTORY COMMAND %zu ===", ++cmd_counter);
+    // void ArctosHardwareInterface::sendPositionCommands()
+    // {
+    //     static size_t cmd_counter = 0;
+    //     RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
+    //                 "=== TRAJECTORY COMMAND %zu ===", ++cmd_counter);
 
-        for (size_t i = 0; i < num_joints_; ++i)
-        {
-            int32_t target_counts = radiansToCount(position_commands_[i], gear_ratios_[i]);
+    //     for (size_t i = 0; i < num_joints_; ++i)
+    //     {
+    //         int32_t target_counts = radiansToCounts(position_commands_[i], gear_ratios_[i]);
 
-            RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
-                        "Joint %zu: cmd=%.3f rad, counts=%d", i, position_commands_[i], target_counts);
+    //         RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
+    //                     "Joint %zu: cmd=%.3f rad, counts=%d", i, position_commands_[i], target_counts);
 
-            can_driver_->runPositionAbs(can_ids_[i], vel_, accel_, target_counts);
-        }
-    }
+    //         can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_counts);
+    //     }
+    // }
 
 } // namespace arctos_hardware_interface
 

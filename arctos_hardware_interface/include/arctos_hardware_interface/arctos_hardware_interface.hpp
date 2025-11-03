@@ -26,6 +26,19 @@ namespace arctos_hardware_interface
     static constexpr double POSITION_CHANGE_THRESHOLD = 0.01;
     static constexpr double VELOCITY_EPSILON = 1e-9;
     static constexpr double TWO_PI = 2.0 * M_PI;
+    
+    // Conversion utilities
+    inline double countsToRadians(int64_t counts, double gear_ratio) const
+    {
+        if (std::abs(gear_ratio) < 1e-9) return 0.0;  // Prevent division by near-zero
+        return static_cast<double>(counts) / ENCODER_CPR * TWO_PI / gear_ratio;
+    }
+    
+    inline int32_t radiansToCounts(double radians, double gear_ratio) const
+    {
+        if (std::abs(gear_ratio) < 1e-9) return 0;  // Prevent division by near-zero
+        return static_cast<int32_t>(radians * gear_ratio / TWO_PI * ENCODER_CPR);
+    }
 
     // SystemInterface overrides
     CallbackReturn on_init(const hw::HardwareComponentInterfaceParams &params) override;
@@ -42,8 +55,9 @@ namespace arctos_hardware_interface
 
   private:
     // Core components
-    std::unique_ptr<ServoCanSimple> can_driver_;
-    
+    // std::unique_ptr<ServoCanSimple> can_driver_;
+    ServoCanSimple can_driver_;
+
     // Configuration
     std::size_t num_joints_;
     uint16_t vel_;
@@ -71,19 +85,7 @@ namespace arctos_hardware_interface
     void updateJointVelocity(size_t joint_index, double prev_position, double dt);
     bool hasCommandsChanged() const;
     void sendPositionCommands();
-    
-    // Conversion utilities
-    inline double countsToRadians(int64_t counts, double gear_ratio) const
-    {
-        if (std::abs(gear_ratio) < 1e-9) return 0.0;  // Prevent division by near-zero
-        return static_cast<double>(counts) / ENCODER_CPR * TWO_PI / gear_ratio;
-    }
-    
-    inline int32_t radiansToCount(double radians, double gear_ratio) const
-    {
-        if (std::abs(gear_ratio) < 1e-9) return 0;  // Prevent division by near-zero
-        return static_cast<int32_t>(radians * gear_ratio / TWO_PI * ENCODER_CPR);
-    }
+
   };
 
 } // namespace arctos_hardware_interface

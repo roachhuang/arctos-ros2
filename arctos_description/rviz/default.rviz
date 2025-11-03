@@ -179,7 +179,7 @@ Visualization Manager:
                             {}
       Update Interval: 0
       Value: true
-    - Acceleration_Scaling_Factor: 0.5000000000000001
+    - Acceleration_Scaling_Factor: 0.10000000000000014
       Class: moveit_rviz_plugin/MotionPlanning
       Enabled: true
       Move Group Namespace: ""
@@ -368,7 +368,7 @@ Visualization Manager:
         Show Robot Collision: false
         Show Robot Visual: true
       Value: true
-      Velocity_Scaling_Factor: 0.5000000000000001
+      Velocity_Scaling_Factor: 0.10000000000000003
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -415,7 +415,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 0.9156209230422974
+      Distance: 2.3118112087249756
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
