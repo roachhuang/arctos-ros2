@@ -23,7 +23,7 @@ namespace arctos_hardware_interface
   {
   public:
     static constexpr int ENCODER_CPR = 16384;
-    static constexpr double POSITION_CHANGE_THRESHOLD = 0.01;
+    static constexpr double POSITION_CHANGE_THRESHOLD = 0.001;
     static constexpr double VELOCITY_EPSILON = 1e-9;
     static constexpr double TWO_PI = 2.0 * M_PI;
     

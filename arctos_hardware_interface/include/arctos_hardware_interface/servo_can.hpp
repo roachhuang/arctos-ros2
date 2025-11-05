@@ -6,6 +6,7 @@
 #include <optional>
 #include <chrono>
 #include <cstring>
+#include <string>
 #include <errno.h>
 #include <linux/can.h>
 #include <sys/socket.h>

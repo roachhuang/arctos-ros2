@@ -185,8 +185,8 @@ namespace arctos_hardware_interface
 
         double dt = period.seconds();
         auto positions = can_driver_.getPositions();
-        RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
-                    "Exported %zu postions", positions.size());
+        // RCLCPP_INFO(rclcpp::get_logger("ArctosHardwareInterface"),
+        //             "Exported %zu postions", positions.size());
 
         // Use actual number of joints, not hardcoded 6
         for (size_t i = 0; i < num_joints_ && i < positions.size(); ++i)
@@ -234,20 +234,22 @@ namespace arctos_hardware_interface
 
     hw::return_type ArctosHardwareInterface::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
     {
-        if (hasCommandsChanged())
-        {
-            // sendPositionCommands();
-            prev_position_commands_ = position_commands_;
 
-            for (size_t i = 0; i < num_joints_; ++i)
+        // sendPositionCommands();
+        // prev_position_commands_ = position_commands_;
+
+        for (size_t i = 0; i < num_joints_; ++i)
+        {
+            double cmd = position_commands_[i];
+            double pos = position_states_[i];
+            if (std::fabs(cmd - pos) < POSITION_CHANGE_THRESHOLD)
             {
-                if (i < can_ids_.size() && i < gear_ratios_.size())
-                {
-                    int32_t target_pos = radiansToCounts(position_commands_[i], gear_ratios_[i]);
-                    can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
-                }
+                cmd = pos;
             }
+            int32_t target_pos = radiansToCounts(cmd, gear_ratios_[i]);
+            can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
         }
+
         return hardware_interface::return_type::OK;
     }
 
@@ -255,7 +257,7 @@ namespace arctos_hardware_interface
     {
         for (size_t i = 0; i < position_commands_.size(); ++i)
         {
-            if (std::abs(position_commands_[i] - prev_position_commands_[i]) > POSITION_CHANGE_THRESHOLD)
+            if (std::fabs(position_commands_[i] - position_states_[i]) > POSITION_CHANGE_THRESHOLD)
             {
                 return true;
             }

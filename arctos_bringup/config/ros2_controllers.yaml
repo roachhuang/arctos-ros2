@@ -27,15 +27,15 @@ arm_controller:
       - position
     allow_nonzero_velocity_at_trajectory_end: true
     open_loop_control: false
-    constraints:
-      stopped_velocity_tolerance: 1000.0
-      goal_time: 0.0
-      X_joint: {trajectory: 1000.0, goal: 1000.0}
-      Y_joint: {trajectory: 1000.0, goal: 1000.0}
-      Z_joint: {trajectory: 1000.0, goal: 1000.0}
-      A_joint: {trajectory: 1000.0, goal: 1000.0}
-      B_joint: {trajectory: 1000.0, goal: 1000.0}
-      C_joint: {trajectory: 1000.0, goal: 1000.0}
+    # constraints:
+    #   stopped_velocity_tolerance: 1000.0
+    #   goal_time: 0.0
+    #   X_joint: {trajectory: 1000.0, goal: 1000.0}
+    #   Y_joint: {trajectory: 1000.0, goal: 1000.0}
+    #   Z_joint: {trajectory: 1000.0, goal: 1000.0}
+    #   A_joint: {trajectory: 1000.0, goal: 1000.0}
+    #   B_joint: {trajectory: 1000.0, goal: 1000.0}
+    #   C_joint: {trajectory: 1000.0, goal: 1000.0}
     allow_partial_joints_goal: true
     allow_integration_in_goal_trajectories: true
 
