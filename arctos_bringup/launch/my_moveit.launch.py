@@ -95,13 +95,13 @@ def generate_launch_description():
         ),
     )
 
-    remote_interface = IncludeLaunchDescription(
-        os.path.join(
-            get_package_share_directory("arctos_remote"),
-            "launch",
-            "alexa.launch.py",
-        ),
-    )
+    # remote_interface = IncludeLaunchDescription(
+    #     os.path.join(
+    #         get_package_share_directory("arctos_remote"),
+    #         "launch",
+    #         "alexa.launch.py",
+    #     ),
+    # )
     
     spawn_commander = Node(
         package="arctos_commander_cpp",
@@ -124,7 +124,7 @@ def generate_launch_description():
             spawn_arm_controller,
             spawn_gripper_controller,   
             moveit,
-            rviz_node
+            rviz_node,
             # remote_interface,            
         ]
     )

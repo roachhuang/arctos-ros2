@@ -17,7 +17,7 @@ include_directories(include)
 
 add_library(${PROJECT_NAME} SHARED
   src/arctos_hardware_interface.cpp
-  include/arctos_hardware_interface/servo_can.hpp
+  src/servo_can.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

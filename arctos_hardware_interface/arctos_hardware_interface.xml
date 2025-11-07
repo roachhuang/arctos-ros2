@@ -1,4 +1,4 @@
-<library path="arctos_hardware_interface">
+<library path="libarctos_hardware_interface">
   <class name="arctos_hardware_interface/ArctosHardwareInterface"
          type="arctos_hardware_interface::ArctosHardwareInterface"
          base_class_type="hardware_interface::SystemInterface">

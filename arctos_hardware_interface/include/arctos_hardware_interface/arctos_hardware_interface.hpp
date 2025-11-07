@@ -26,18 +26,20 @@ namespace arctos_hardware_interface
     static constexpr double POSITION_CHANGE_THRESHOLD = 0.001;
     static constexpr double VELOCITY_EPSILON = 1e-9;
     static constexpr double TWO_PI = 2.0 * M_PI;
-    
+
     // Conversion utilities
     inline double countsToRadians(int64_t counts, double gear_ratio) const
     {
-        if (std::abs(gear_ratio) < 1e-9) return 0.0;  // Prevent division by near-zero
-        return static_cast<double>(counts) / ENCODER_CPR * TWO_PI / gear_ratio;
+      if (std::abs(gear_ratio) < 1e-9)
+        return 0.0; // Prevent division by near-zero
+      return static_cast<double>(counts) / ENCODER_CPR * TWO_PI / gear_ratio;
     }
-    
+
     inline int32_t radiansToCounts(double radians, double gear_ratio) const
     {
-        if (std::abs(gear_ratio) < 1e-9) return 0;  // Prevent division by near-zero
-        return static_cast<int32_t>(radians * gear_ratio / TWO_PI * ENCODER_CPR);
+      if (std::abs(gear_ratio) < 1e-9)
+        return 0; // Prevent division by near-zero
+      return static_cast<int32_t>(radians * gear_ratio / TWO_PI * ENCODER_CPR);
     }
 
     // SystemInterface overrides
@@ -56,7 +58,7 @@ namespace arctos_hardware_interface
   private:
     // Core components
     // std::unique_ptr<ServoCanSimple> can_driver_;
-    ServoCanSimple can_driver_;
+    mks_servo_driver::MksServoDriver can_driver_;
 
     // Configuration
     std::size_t num_joints_;
@@ -73,19 +75,22 @@ namespace arctos_hardware_interface
     std::vector<double> velocity_states_;
     std::vector<double> position_commands_;
     std::vector<double> prev_position_commands_;
-
+    std::vector<bool> is_homing_;
+    // IN_1 (home lmt)
+    std::vector<bool> in1_;
+    // IN_2 (end lmt)
+    std::vector<bool> in2_;
     // Helper methods
     void initializeJointData();
-    void loadJointParameters();
-    bool loadHardwareParameters();
+    // void loadJointParameters();
+    void loadHardwareParameters();
     bool connectToCanInterface();
     void readInitialPositions();
-    
+
     bool readJointPosition(size_t joint_index);
     void updateJointVelocity(size_t joint_index, double prev_position, double dt);
     bool hasCommandsChanged() const;
     void sendPositionCommands();
-
   };
 
 } // namespace arctos_hardware_interface
