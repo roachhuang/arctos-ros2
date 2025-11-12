@@ -74,7 +74,7 @@ namespace arctos_hardware_interface
     std::vector<double> position_states_;
     std::vector<double> velocity_states_;
     std::vector<double> position_commands_;
-    std::vector<double> prev_position_commands_;
+    // std::vector<double> prev_position_commands_;
     std::vector<bool> is_homing_;
     // IN_1 (home lmt)
     std::vector<bool> in1_;

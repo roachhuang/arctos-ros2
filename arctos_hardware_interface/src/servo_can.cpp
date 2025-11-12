@@ -72,6 +72,11 @@ namespace mks_servo_driver
     void MksServoDriver::deactive()
     {
         running_ = false;
+        for (uint16_t id = 1; id <= 6; ++id)
+        {
+            enableMotor(id, false);
+        }
+
         if (poll_thread_.joinable())
         {
             poll_thread_.join();
@@ -91,11 +96,20 @@ namespace mks_servo_driver
         data.insert(data.end(), params.begin(), params.end());
         data.push_back(calcCrc(id, data));
         if (data.size() > 8)
+        {
+            RCLCPP_INFO(rclcpp::get_logger("MKS"), "invalid cmd size: %ld", data.size());
             return false;
+        }
+
         can_frame tx{};
         tx.can_id = id;
         tx.can_dlc = data.size();
         std::memcpy(tx.data, data.data(), tx.can_dlc);
+
+        auto now = std::chrono::steady_clock::now();
+        auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+        RCLCPP_INFO(rclcpp::get_logger("MKS"), "t_can_tx time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
+
         return write(sock_, &tx, sizeof(tx)) == sizeof(tx);
     }
 
@@ -164,38 +178,45 @@ namespace mks_servo_driver
         sendCmd(id, CANCommands::GO_HOME, {});
     }
 
-    uint8_t MksServoDriver::sendCmdSync(uint16_t id, uint8_t cmd, const std::vector<uint8_t>& params, int timeout_ms, bool use_homing_status)
+    uint8_t MksServoDriver::sendCmdSync(uint16_t id, uint8_t cmd, const std::vector<uint8_t> &params, int timeout_ms, bool use_homing_status)
     {
-        if (id < 1 || id > 6) return 0xFF;
-        
+        if (id < 1 || id > 6)
+            return 0xFF;
+
         // Clear previous status
         {
             std::lock_guard<std::mutex> lock(status_mutex_);
-            if (use_homing_status) {
-                homing_status_[id-1] = 0xFF;
-            } else {
-                command_status_[id-1] = 0xFF;
+            if (use_homing_status)
+            {
+                homing_status_[id - 1] = 0xFF;
+            }
+            else
+            {
+                command_status_[id - 1] = 0xFF;
             }
         }
-        
+
         // Send command
-        if (!sendCmd(id, cmd, params)) {
+        if (!sendCmd(id, cmd, params))
+        {
             return 0xFF;
         }
-        
+
         // Wait for response
         auto start = std::chrono::steady_clock::now();
-        while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(timeout_ms)) {
+        while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(timeout_ms))
+        {
             {
                 std::lock_guard<std::mutex> lock(status_mutex_);
-                uint8_t status = use_homing_status ? homing_status_[id-1] : command_status_[id-1];
-                if (status != 0xFF) {
+                uint8_t status = use_homing_status ? homing_status_[id - 1] : command_status_[id - 1];
+                if (status != 0xFF)
+                {
                     return status;
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        
+
         return 0xFF; // Timeout
     }
 
@@ -223,23 +244,26 @@ namespace mks_servo_driver
 
     bool MksServoDriver::getIN1State(uint16_t id)
     {
-        if (id < 1 || id > 6) return false;
+        if (id < 1 || id > 6)
+            return false;
         std::lock_guard<std::mutex> lock(io_mutex_);
         return in1_states_[id];
     }
 
     bool MksServoDriver::getIN2State(uint16_t id)
     {
-        if (id < 1 || id > 6) return false;
+        if (id < 1 || id > 6)
+            return false;
         std::lock_guard<std::mutex> lock(io_mutex_);
         return in2_states_[id];
     }
 
     int64_t MksServoDriver::getPosition(uint16_t id)
     {
-        if (id < 1 || id > 6) return 0;
+        if (id < 1 || id > 6)
+            return 0;
         std::lock_guard<std::mutex> lock(pos_mutex_);
-        return positions_[id-1];
+        return positions_[id - 1];
     }
 
     std::vector<uint8_t> MksServoDriver::getCommandStatus()
@@ -284,6 +308,7 @@ namespace mks_servo_driver
                 // Process all command responses - processCanFrame handles everything internally
                 processCanFrame(frame);
             }
+            // pollLoop runs every 5ms
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
     }
@@ -312,7 +337,14 @@ namespace mks_servo_driver
         switch (frame.data[0])
         {
         case CANCommands::READ_ENCODER:
-            if (frame.can_dlc == 8) {
+            if (frame.can_dlc == 8)
+            {
+                /* total round‑trip latency: t_servo_feedback - t_moveit_send
+                Adjust vel and acc until latency is consistent and trajectories feel smooth.
+                */
+                auto now = std::chrono::steady_clock::now();
+                auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+                RCLCPP_INFO(rclcpp::get_logger("MKS"), "servo response time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
                 int64_t position = toI48(&frame.data[1]);
                 size_t idx = frame.can_id - 1;
                 std::lock_guard<std::mutex> lock(pos_mutex_);
@@ -322,24 +354,26 @@ namespace mks_servo_driver
 
         case CANCommands::READ_IO:
         {
-            if (frame.can_dlc != 3) {
+            if (frame.can_dlc == 3)
+            {
                 uint8_t io_status = frame.data[1];
                 size_t idx = frame.can_id - 1;
-                
+
                 std::lock_guard<std::mutex> lock(io_mutex_);
                 // EN pins active low
-                in1_states_[idx] = (io_status & 0x01) == 0;  // Bit 0: IN_1
-                in2_states_[idx] = (io_status & 0x02) == 0;  // Bit 1: IN_2
+                in1_states_[idx] = (io_status & 0x01) == 0; // Bit 0: IN_1
+                in2_states_[idx] = (io_status & 0x02) == 0; // Bit 1: IN_2
             }
             break;
         }
         case CANCommands::GO_HOME:
         case CANCommands::CALIBRATE:
         {
-            if (frame.can_dlc >= 3 && frame.can_id >= 1 && frame.can_id <= 6) {
+            if (frame.can_dlc >= 3 && frame.can_id >= 1 && frame.can_id <= 6)
+            {
                 uint8_t status = frame.data[1];
                 size_t idx = frame.can_id - 1;
-                
+
                 std::lock_guard<std::mutex> lock(status_mutex_);
                 homing_status_[idx] = status;
             }
@@ -349,20 +383,21 @@ namespace mks_servo_driver
         case CANCommands::ENABLE_MOTOR:
         case CANCommands::SET_ZERO_POSITION:
         {
-            if (frame.can_dlc >= 3 && frame.can_id >= 1 && frame.can_id <= 6) {
+            if (frame.can_dlc >= 3 && frame.can_id >= 1 && frame.can_id <= 6)
+            {
                 uint8_t status = frame.data[1];
                 size_t idx = frame.can_id - 1;
-                
+
                 std::lock_guard<std::mutex> lock(status_mutex_);
                 command_status_[idx] = status;
             }
             break;
         }
         default:
-            RCLCPP_INFO(rclcpp::get_logger("Arctos"), "Received unhandled command: 0x%02X", frame.data[0]);
+            RCLCPP_INFO(rclcpp::get_logger("MKS"), "Received unhandled command: 0x%02X", frame.data[0]);
             break;
         }
-        
+
         return std::nullopt;
     }
 

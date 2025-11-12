@@ -1,7 +1,7 @@
 /**
  * @file servo_can.hpp
  * @brief SocketCAN driver for MKS SERVO42 & 57D_CAN servos
- * @author Arctos Team
+ * @author roach + ai
  */
 
 #pragma once

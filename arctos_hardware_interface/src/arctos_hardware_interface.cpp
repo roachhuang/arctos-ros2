@@ -34,7 +34,6 @@ namespace arctos_hardware_interface
         position_commands_.resize(num_joints_, 0.0);
         position_states_.resize(num_joints_, 0.0);
         velocity_states_.resize(num_joints_, 0.0);
-        prev_position_commands_.resize(num_joints_, 0.0);
     }
 
     // void ArctosHardwareInterface::loadJointParameters()
@@ -213,29 +212,29 @@ namespace arctos_hardware_interface
             if (is_homing_[i])
             {
                 // If homing, we EXPECT to hit the switch.
-                if (can_driver_.getIN1State(i))
+                if (can_driver_.getIN1State(can_ids_[i]))
                 {
-                    RCLCPP_INFO(rclcpp::get_logger("ArmHardwareInterface"),
+                    RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"),
                                 "Joint '%s' homing complete. Switch triggered.", info_.joints[i].name.c_str());
-
-                    // This is the "zeroing" event.
-                    // TODO: Tell the MKS driver to set its internal "0"
-                    // mks_driver_->setEncoderZero(motor_id);
 
                     // Stop the homing flag
                     is_homing_[i] = false;
+                    // Set the position to zero
+                    position_states_[i] = 0.0;
+                    can_driver_.setZero(can_ids_[i]);
                 }
             }
             else
             {
-                if (can_driver_.getIN1State(i) || can_driver_.getIN2State(i))
+                if (can_driver_.getIN1State(can_ids_[i]) || can_driver_.getIN2State(can_ids_[i]))
                 {
-                    RCLCPP_FATAL(rclcpp::get_logger("ArmHardwareInterface"),
+                    RCLCPP_FATAL(rclcpp::get_logger("ArctosInterface"),
                                  "HARDWARE LIMIT HIT on joint '%s' unexpectedly!", info_.joints[i].name.c_str());
 
                     // This is a critical safety stop.
                     can_driver_.EmergencyStop(can_ids_[i]);
                     // Tell ros2_control to stop everything.
+
                     return hardware_interface::return_type::ERROR;
                 }
             }
@@ -280,25 +279,21 @@ namespace arctos_hardware_interface
         }
     }
 
-    hw::return_type ArctosHardwareInterface::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
+    hw::return_type ArctosHardwareInterface::write(const rclcpp::Time & time, const rclcpp::Duration & /*period*/)
     {
-
-        // sendPositionCommands();
-        // prev_position_commands_ = position_commands_;
-
         for (size_t i = 0; i < num_joints_; ++i)
         {
             // Only send command if NOT homing (homing is a special "search" move)
             if (!is_homing_[i])
             {
                 double cmd = position_commands_[i];
-                double pos = position_states_[i];
-                if (std::fabs(cmd - pos) < POSITION_CHANGE_THRESHOLD)
+                if (std::fabs(cmd - position_states_[i]) > POSITION_CHANGE_THRESHOLD)
                 {
-                    cmd = pos;
+                    RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"),
+                                "t_ros2_write: %ld.%09ld", time.nanoseconds() / 1000000000, time.nanoseconds() % 1000000000);
+                    int32_t target_pos = radiansToCounts(cmd, gear_ratios_[i]);
+                    can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
                 }
-                int32_t target_pos = radiansToCounts(cmd, gear_ratios_[i]);
-                can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
             }
         }
 
@@ -315,24 +310,7 @@ namespace arctos_hardware_interface
             }
         }
         return false;
-    }
-
-    // void ArctosHardwareInterface::sendPositionCommands()
-    // {
-    //     static size_t cmd_counter = 0;
-    //     RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"),
-    //                 "=== TRAJECTORY COMMAND %zu ===", ++cmd_counter);
-
-    //     for (size_t i = 0; i < num_joints_; ++i)
-    //     {
-    //         int32_t target_counts = radiansToCounts(position_commands_[i], gear_ratios_[i]);
-
-    //         RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"),
-    //                     "Joint %zu: cmd=%.3f rad, counts=%d", i, position_commands_[i], target_counts);
-
-    //         can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_counts);
-    //     }
-    // }
+    }   
 
 } // namespace arctos_hardware_interface
 
