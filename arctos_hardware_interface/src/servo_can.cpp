@@ -8,6 +8,7 @@
 // #include <cmath>
 #include <algorithm>
 
+static const rclcpp::Logger LOGGER = rclcpp::get_logger("mks_driver");
 namespace mks_servo_driver
 {
 
@@ -97,7 +98,7 @@ namespace mks_servo_driver
         data.push_back(calcCrc(id, data));
         if (data.size() > 8)
         {
-            RCLCPP_INFO(rclcpp::get_logger("MKS"), "invalid cmd size: %ld", data.size());
+            RCLCPP_ERROR(LOGGER, "invalid cmd size: %ld", data.size());
             return false;
         }
 
@@ -108,7 +109,7 @@ namespace mks_servo_driver
 
         auto now = std::chrono::steady_clock::now();
         auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-        RCLCPP_INFO(rclcpp::get_logger("MKS"), "t_can_tx time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
+        RCLCPP_INFO(LOGGER, "t_can_tx time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
 
         return write(sock_, &tx, sizeof(tx)) == sizeof(tx);
     }
@@ -344,7 +345,7 @@ namespace mks_servo_driver
                 */
                 auto now = std::chrono::steady_clock::now();
                 auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-                RCLCPP_INFO(rclcpp::get_logger("MKS"), "servo response time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
+                RCLCPP_INFO(LOGGER, "servo response time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
                 int64_t position = toI48(&frame.data[1]);
                 size_t idx = frame.can_id - 1;
                 std::lock_guard<std::mutex> lock(pos_mutex_);
@@ -394,7 +395,7 @@ namespace mks_servo_driver
             break;
         }
         default:
-            RCLCPP_INFO(rclcpp::get_logger("MKS"), "Received unhandled command: 0x%02X", frame.data[0]);
+            RCLCPP_ERROR(LOGGER, "Received unhandled command: 0x%02X", frame.data[0]);
             break;
         }
 

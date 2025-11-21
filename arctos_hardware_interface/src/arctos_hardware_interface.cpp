@@ -5,11 +5,13 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+static const rclcpp::Logger LOGGER = rclcpp::get_logger("ArctosInterface");
 namespace arctos_hardware_interface
 {
 
     hardware_interface::CallbackReturn ArctosHardwareInterface::on_init(const hw::HardwareComponentInterfaceParams &params)
     {
+
         // can_driver_ = std::make_unique<ServoCanSimple>();
         if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
         {
@@ -19,7 +21,7 @@ namespace arctos_hardware_interface
         initializeJointData();
         // loadJointParameters();
 
-        RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"),
+        RCLCPP_INFO(LOGGER,
                     "Initialized with %zu joints", num_joints_);
         return hardware_interface::CallbackReturn::SUCCESS;
     }
@@ -48,7 +50,7 @@ namespace arctos_hardware_interface
     CallbackReturn ArctosHardwareInterface::on_configure(const rclcpp_lifecycle::State &previous_state)
     {
         (void)previous_state;
-        RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"), "Configuring hardware interface...");
+        RCLCPP_DEBUG(LOGGER, "Configuring hardware interface...");
 
         loadHardwareParameters();
 
@@ -83,12 +85,12 @@ namespace arctos_hardware_interface
     {
         if (can_driver_.connect(can_interface_))
         {
-            RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"),
-                        "Connected to CAN interface: %s", can_interface_.c_str());
+            RCLCPP_DEBUG(LOGGER,
+                         "Connected to CAN interface: %s", can_interface_.c_str());
             return true;
         }
 
-        RCLCPP_ERROR(rclcpp::get_logger("ArctosInterface"),
+        RCLCPP_FATAL(LOGGER,
                      "Failed to connect to CAN interface: %s", can_interface_.c_str());
         return false;
     }
@@ -96,7 +98,7 @@ namespace arctos_hardware_interface
     CallbackReturn ArctosHardwareInterface::on_activate(const rclcpp_lifecycle::State &previous_state)
     {
         (void)previous_state;
-        RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"), "Activating hardware...");
+        RCLCPP_DEBUG(LOGGER, "Activating hardware...");
         // for (size_t i = 0; i < info_.joints.size(); i++)
         // for (size_t i = 1; i < 3; i++)
         // {
@@ -104,7 +106,7 @@ namespace arctos_hardware_interface
         //     // const auto &joint_name = info_.joints[i].name;
         //     if (!can_driver_.enableMotor(can_ids_[i], true))
         //     {
-        //         RCLCPP_ERROR(rclcpp::get_logger("ArctosInterface"),
+        //         RCLCPP_ERROR(LOGGER,
         //                      "Failed to enable motor %zu", i);
         //         return CallbackReturn::ERROR;
         //     }
@@ -148,7 +150,7 @@ namespace arctos_hardware_interface
     CallbackReturn ArctosHardwareInterface::on_deactivate(const rclcpp_lifecycle::State &previous_state)
     {
         (void)previous_state;
-        RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"), "Deactivating hardware...");
+        RCLCPP_DEBUG(LOGGER, "Deactivating hardware...");
         for (auto can_id : can_ids_)
         {
             can_driver_.enableMotor(can_id, false);
@@ -174,8 +176,8 @@ namespace arctos_hardware_interface
                 &velocity_states_[i]);
         }
 
-        RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"),
-                    "Exported %zu state interfaces", state_interfaces.size());
+        RCLCPP_DEBUG(LOGGER,
+                     "Exported %zu state interfaces", state_interfaces.size());
         return state_interfaces;
     }
 
@@ -191,8 +193,8 @@ namespace arctos_hardware_interface
                 &position_commands_[i]);
         }
 
-        RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"),
-                    "Exported %zu command interfaces", cmds.size());
+        RCLCPP_DEBUG(LOGGER,
+                     "Exported %zu command interfaces", cmds.size());
         return cmds;
     }
 
@@ -203,7 +205,7 @@ namespace arctos_hardware_interface
 
         double dt = period.seconds();
         auto positions = can_driver_.getPositions();
-        // RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"),
+        // RCLCPP_INFO(LOGGER,
         //             "Exported %zu postions", positions.size());
 
         // Use actual number of joints, not hardcoded 6
@@ -214,7 +216,7 @@ namespace arctos_hardware_interface
                 // If homing, we EXPECT to hit the switch.
                 if (can_driver_.getIN1State(can_ids_[i]))
                 {
-                    RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"),
+                    RCLCPP_INFO(LOGGER,
                                 "Joint '%s' homing complete. Switch triggered.", info_.joints[i].name.c_str());
 
                     // Stop the homing flag
@@ -226,9 +228,10 @@ namespace arctos_hardware_interface
             }
             else
             {
+                // If NOT homing, hitting a limit switch is an EMERGENCY.
                 if (can_driver_.getIN1State(can_ids_[i]) || can_driver_.getIN2State(can_ids_[i]))
                 {
-                    RCLCPP_FATAL(rclcpp::get_logger("ArctosInterface"),
+                    RCLCPP_FATAL(LOGGER,
                                  "HARDWARE LIMIT HIT on joint '%s' unexpectedly!", info_.joints[i].name.c_str());
 
                     // This is a critical safety stop.
@@ -279,7 +282,7 @@ namespace arctos_hardware_interface
         }
     }
 
-    hw::return_type ArctosHardwareInterface::write(const rclcpp::Time & time, const rclcpp::Duration & /*period*/)
+    hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &time, const rclcpp::Duration & /*period*/)
     {
         for (size_t i = 0; i < num_joints_; ++i)
         {
@@ -289,8 +292,8 @@ namespace arctos_hardware_interface
                 double cmd = position_commands_[i];
                 if (std::fabs(cmd - position_states_[i]) > POSITION_CHANGE_THRESHOLD)
                 {
-                    RCLCPP_INFO(rclcpp::get_logger("ArctosInterface"),
-                                "t_ros2_write: %ld.%09ld", time.nanoseconds() / 1000000000, time.nanoseconds() % 1000000000);
+                    RCLCPP_DEBUG(LOGGER,
+                                 "t_ros2_write: %ld.%09ld", time.nanoseconds() / 1000000000, time.nanoseconds() % 1000000000);
                     int32_t target_pos = radiansToCounts(cmd, gear_ratios_[i]);
                     can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
                 }
@@ -310,7 +313,7 @@ namespace arctos_hardware_interface
             }
         }
         return false;
-    }   
+    }
 
 } // namespace arctos_hardware_interface
 

@@ -104,7 +104,7 @@ namespace mks_servo_driver
         void pollLoop();
         bool readAllAvailable(std::vector<can_frame> &frames);
         std::optional<int64_t> processCanFrame(const can_frame &frame);
-        uint8_t sendCmdSync(uint16_t id, uint8_t cmd, const std::vector<uint8_t>& params, int timeout_ms, bool use_homing_status = false);
+        uint8_t sendCmdSync(uint16_t id, uint8_t cmd, const std::vector<uint8_t> &params, int timeout_ms, bool use_homing_status = false);
         static uint8_t calcCrc(uint32_t id, const std::vector<uint8_t> &data);
         static int64_t toI48(const uint8_t *p);
     };
