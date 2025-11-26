@@ -23,5 +23,6 @@ moveit_simple_controller_manager:
     type: FollowJointTrajectory
     joints:
       - Right_jaw_joint
+      - Left_jaw_joint
     action_ns: follow_joint_trajectory
     default: true

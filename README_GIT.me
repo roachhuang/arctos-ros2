@@ -48,3 +48,8 @@ when to use rebase:
 # supposely we should create repo in src folder and push only files in src folder 
 cd ros2_ws/src
 git clone --depth 1 https://github.com/xxx
+
+git restore .
+// ignore untracked files 
+git reset --hard
+git clean -fd

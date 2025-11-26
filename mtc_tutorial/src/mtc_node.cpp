@@ -108,7 +108,7 @@ mtc::Task MTCTaskNode::createTask()
 
   const auto &arm_group_name = "arm";
   const auto &hand_group_name = "gripper";
-  const auto &hand_frame = "tool_link";
+  const auto &hand_frame = "Gripper_1";
 
   // Set task properties
   task.setProperty("group", arm_group_name);
@@ -178,6 +178,24 @@ mtc::Task MTCTaskNode::createTask()
     auto grasp = std::make_unique<mtc::SerialContainer>("pick object");
     task.properties().exposeTo(grasp->properties(), {"eef", "group", "ik_frame"});
     grasp->properties().configureInitFrom(mtc::Stage::PARENT, {"eef", "group", "ik_frame"});
+
+    {
+      auto stage =
+          std::make_unique<mtc::stages::MoveRelative>("approach object", cartesian_planner);
+      stage->properties().set("marker_ns", "approach_object");
+      stage->properties().set("link", hand_frame);
+      stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
+      stage->setMinMaxDistance(0.0, 0.15);
+      stage->setIKFrame(hand_frame);
+
+      // Set approach direction in hand_frame (gripper approach axis)
+      geometry_msgs::msg::Vector3Stamped vec;
+      vec.header.frame_id = hand_frame;
+      vec.vector.y = -1.0;  // Approach along -Y axis of gripper
+
+      stage->setDirection(vec);
+      grasp->insert(std::move(stage));
+    }
 
     // generate pick pose
     {
@@ -363,7 +381,7 @@ mtc::Task MTCTaskNode::createTask()
     stage->setGoal("ready");
     task.add(std::move(stage));
   }
-  */
+ */
 
   return task;
 }

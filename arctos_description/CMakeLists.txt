@@ -20,7 +20,7 @@ install(
 
 # Install directories
 install(
-  DIRECTORY config launch urdf rviz world
+  DIRECTORY launch urdf rviz world
   DESTINATION share/${PROJECT_NAME}
 )
 

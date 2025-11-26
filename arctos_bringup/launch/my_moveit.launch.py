@@ -40,7 +40,7 @@ def generate_launch_description():
     static_tf = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
-        arguments=["0", "0", "0", "0", "0", "0", "world", "base_link"],
+        arguments=["0", "0", "0", "0", "0", "0", "1", "world", "base_link"],
     )
 
     robot_state_publisher_node = Node(

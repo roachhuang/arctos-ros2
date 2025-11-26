@@ -4,11 +4,11 @@
   <!-- Define all links -->
   <link name="world" />
   <link name="tool_link" />
-
+ 
   <xacro:arctos_link
     name="base_link"
     origin_xyz="0 0 0" origin_rpy="0 0 0"
-    material_name="green"
+    material_name="white"
     inertia_origin_xyz="0.0009375030874740357 0.047087016508753216 0.06663230338123677"
     inertia_origin_rpy="0 0 0"
     mass="2.3"
@@ -74,14 +74,15 @@
   />
 
   <!-- Define all joints -->
-  <joint name="world_joint" type="fixed">
+  <joint name="base_joint" type="fixed">
     <parent link="world" />
     <child link="base_link" />
     <origin xyz="0 0 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
   </joint>
 
   <xacro:arctos_joint
-    name="X_joint" type="revolute"
+    name="X_joint" type="continuous"
     parent="base_link" child="Link_1_1"
     origin_xyz="0.0 0.0 0.1126" origin_rpy="0 0 0"
     axis_xyz="-0.0 0.0 1.0"
@@ -89,7 +90,7 @@
   />
 
   <xacro:arctos_joint
-    name="Y_joint" type="revolute"
+    name="Y_joint" type="continuous"
     parent="Link_1_1" child="Link_2_1"
     origin_xyz="0.0 -0.020356 ${0.2876-0.1126}" origin_rpy="0 0 0"
     axis_xyz="1.0 -0.0 -0.0"
@@ -97,7 +98,7 @@
   />
 
   <xacro:arctos_joint
-    name="Z_joint" type="revolute"
+    name="Z_joint" type="continuous"
     parent="Link_2_1" child="Link_3_1"
     origin_xyz="0.0 0.001365 0.261035" origin_rpy="0 0 0"
     axis_xyz="1.0 -0.0 0.0"
@@ -105,7 +106,7 @@
   />
 
   <xacro:arctos_joint
-    name="A_joint" type="revolute"
+    name="A_joint" type="continuous"
     parent="Link_3_1" child="Link_4_1"
     origin_xyz="0 -0.13881 0.0217651" origin_rpy="0 0 0"
     axis_xyz="-0.0 1.0 -0.0"
@@ -113,7 +114,7 @@
   />
 
   <xacro:arctos_joint
-    name="B_joint" type="revolute"
+    name="B_joint" type="continuous"
     parent="Link_4_1" child="Link_5_1"
     origin_xyz="0.0 -0.12543 -0.00184" origin_rpy="0 0 0"
     axis_xyz="-1.0 -0.0 0.0"
@@ -121,7 +122,7 @@
   />
 
   <xacro:arctos_joint
-    name="C_joint" type="revolute"
+    name="C_joint" type="continuous"
     parent="Link_5_1" child="Link_6_1"
     origin_xyz="0.0 -0.0398 0.0" origin_rpy="0 0 0"
     axis_xyz="-0.0 1.0 -0.0"
@@ -132,7 +133,6 @@
     <parent link="Link_6_1"/>
     <child link="tool_link"/>
     <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
-    <axis xyz="-0.0 1.0 -0.0"/>
   </joint>
 
   
