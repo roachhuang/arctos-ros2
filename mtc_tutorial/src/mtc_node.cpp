@@ -191,7 +191,7 @@ mtc::Task MTCTaskNode::createTask()
       // Set approach direction in hand_frame (gripper approach axis)
       geometry_msgs::msg::Vector3Stamped vec;
       vec.header.frame_id = hand_frame;
-      vec.vector.y = -1.0;  // Approach along -Y axis of gripper
+      vec.vector.y = -1.0; // Approach along -Y axis of gripper
 
       stage->setDirection(vec);
       grasp->insert(std::move(stage));
@@ -208,9 +208,9 @@ mtc::Task MTCTaskNode::createTask()
       stage->setMonitoredStage(current_state_ptr);
 
       Eigen::Isometry3d grasp_frame_transform = Eigen::Isometry3d::Identity();
-      grasp_frame_transform.translation().y() = -0.06;  // Offset to center of jaws
+      grasp_frame_transform.translation().y() = -0.06; // Offset to center of jaws
       // Rotate 90 degrees around Y-axis so gripper X-axis points up (aligned with object Z-axis)
-      grasp_frame_transform.rotate(Eigen::AngleAxisd(M_PI/2, Eigen::Vector3d::UnitY()));
+      grasp_frame_transform.rotate(Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitY()));
 
       auto wrapper =
           std::make_unique<mtc::stages::ComputeIK>("grasp pose IK", std::move(stage));
@@ -226,22 +226,14 @@ mtc::Task MTCTaskNode::createTask()
     // allow collision before closing hand
     {
       auto stage =
-          std::make_unique<mtc::stages::ModifyPlanningScene>("allow collision (hand,object,arm)");
+          std::make_unique<mtc::stages::ModifyPlanningScene>("allow collision (hand,object)");
       stage->allowCollisions("object",
                              task.getRobotModel()
                                  ->getJointModelGroup(hand_group_name)
                                  ->getLinkModelNamesWithCollisionGeometry(),
                              true);
-      stage->allowCollisions(task.getRobotModel()
-                                 ->getJointModelGroup(hand_group_name)
-                                 ->getLinkModelNamesWithCollisionGeometry(),
-                             task.getRobotModel()
-                                 ->getJointModelGroup(arm_group_name)
-                                 ->getLinkModelNamesWithCollisionGeometry(),
-                             true);
       grasp->insert(std::move(stage));
     }
-
     // close hand stage
     {
       auto stage = std::make_unique<mtc::stages::MoveTo>("close hand", interpolation_planner);
