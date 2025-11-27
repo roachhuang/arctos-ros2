@@ -173,7 +173,6 @@ mtc::Task MTCTaskNode::createTask()
   mtc::Stage *attach_object_stage = nullptr;
 
   // pick container
-  mtc::Stage *pick_stage_ptr = nullptr;
   {
     auto grasp = std::make_unique<mtc::SerialContainer>("pick object");
     task.properties().exposeTo(grasp->properties(), {"eef", "group", "ik_frame"});
@@ -275,11 +274,12 @@ mtc::Task MTCTaskNode::createTask()
       grasp->insert(std::move(stage));
     }
 
-    pick_stage_ptr = grasp.get(); // remember for monitoring place pose generator
+    // pick_stage_ptr = grasp.get(); // remember for monitoring place pose generator
 
     // add grasp container to task
     task.add(std::move(grasp));
   }
+
   //////////////////////////////////////////////////////////////////////
   {
     auto stage_move_to_place = std::make_unique<mtc::stages::Connect>(
@@ -307,7 +307,7 @@ mtc::Task MTCTaskNode::createTask()
       geometry_msgs::msg::PoseStamped target_pose_msg;
       target_pose_msg.header.frame_id = "object";
       // target_pose_msg.pose.position.x = -0.2;
-      target_pose_msg.pose.position.x = -0.55;
+      target_pose_msg.pose.position.x = -0.1;
       target_pose_msg.pose.orientation.w = 1.0;
       stage->setPose(target_pose_msg);
       stage->setMonitoredStage(attach_object_stage); // Hook into attach_object_stage
@@ -315,8 +315,8 @@ mtc::Task MTCTaskNode::createTask()
       // Compute IK
       auto wrapper =
           std::make_unique<mtc::stages::ComputeIK>("place pose IK", std::move(stage));
-      wrapper->setMaxIKSolutions(2);
-      wrapper->setMinSolutionDistance(1.0);
+      wrapper->setMaxIKSolutions(18);
+      wrapper->setMinSolutionDistance(0.01); // cm level
       wrapper->setIKFrame("object");
       wrapper->properties().configureInitFrom(mtc::Stage::PARENT, {"eef", "group"});
       wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, {"target_pose"});
@@ -346,48 +346,51 @@ mtc::Task MTCTaskNode::createTask()
     {
       auto stage = std::make_unique<mtc::stages::MoveRelative>("retreat", cartesian_planner);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-      stage->setMinMaxDistance(0.1, 0.3);
+      stage->setMinMaxDistance(0.02, 0.3);
       stage->setIKFrame(hand_frame);
       stage->properties().set("marker_ns", "retreat");
 
       // Set retreat direction
       geometry_msgs::msg::Vector3Stamped vec;
-      vec.header.frame_id = "world";
-      vec.vector.x = -0.3;
+      vec.header.frame_id = "hand_frame";
+      vec.vector.y = 1.0;
       stage->setDirection(vec);
       place->insert(std::move(stage));
     }
+    task.add(std::move(place));
+  } // end place container
 
-    {
-      auto stage = std::make_unique<mtc::stages::MoveTo>("return home", interpolation_planner);
-      stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-      stage->setGoal("ready");
-      task.add(std::move(stage));
-    }
-
-    return task;
+  // move back to home
+  {
+    auto stage = std::make_unique<mtc::stages::MoveTo>("return home", interpolation_planner);
+    stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
+    stage->setGoal("ready");
+    task.add(std::move(stage));
   }
 
-  int main(int argc, char **argv)
-  {
-    rclcpp::init(argc, argv);
+  return task;
+}
 
-    rclcpp::NodeOptions options;
-    options.automatically_declare_parameters_from_overrides(true);
+int main(int argc, char **argv)
+{
+  rclcpp::init(argc, argv);
 
-    auto mtc_task_node = std::make_shared<MTCTaskNode>(options);
-    rclcpp::executors::MultiThreadedExecutor executor;
+  rclcpp::NodeOptions options;
+  options.automatically_declare_parameters_from_overrides(true);
 
-    auto spin_thread = std::make_unique<std::thread>([&executor, &mtc_task_node]()
-                                                     {
+  auto mtc_task_node = std::make_shared<MTCTaskNode>(options);
+  rclcpp::executors::MultiThreadedExecutor executor;
+
+  auto spin_thread = std::make_unique<std::thread>([&executor, &mtc_task_node]()
+                                                   {
     executor.add_node(mtc_task_node->getNodeBaseInterface());
     executor.spin();
     executor.remove_node(mtc_task_node->getNodeBaseInterface()); });
 
-    mtc_task_node->setupPlanningScene();
-    mtc_task_node->doTask();
+  mtc_task_node->setupPlanningScene();
+  mtc_task_node->doTask();
 
-    spin_thread->join();
-    rclcpp::shutdown();
-    return 0;
-  }
+  spin_thread->join();
+  rclcpp::shutdown();
+  return 0;
+}
