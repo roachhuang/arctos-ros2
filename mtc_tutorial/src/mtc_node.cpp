@@ -207,10 +207,17 @@ mtc::Task MTCTaskNode::createTask()
       stage->setAngleDelta(M_PI / 12);
       stage->setMonitoredStage(current_state_ptr);
 
-      Eigen::Isometry3d grasp_frame_transform = Eigen::Isometry3d::Identity();
+      //Eigen::Isometry3d grasp_frame_transform = Eigen::Isometry3d::Identity();
+      Eigen::Isometry3d grasp_frame_transform;
+      Eigen::Quaterniond q = Eigen::AngleAxisd(M_PI /2, Eigen::Vector3d::UnitX()) *
+                             Eigen::AngleAxisd(M_PI /2, Eigen::Vector3d::UnitY()) *
+                             Eigen::AngleAxisd(M_PI /2, Eigen::Vector3d::UnitZ());
+      grasp_frame_transform.linear() = q.matrix();
+      // grasp_frame_transform.translation().z() = 0.1;
+
       grasp_frame_transform.translation().y() = -0.06; // Offset to center of jaws
       // Rotate 90 degrees around Y-axis so gripper X-axis points up (aligned with object Z-axis)
-      grasp_frame_transform.rotate(Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitY()));
+      // grasp_frame_transform.rotate(Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitY()));
 
       auto wrapper =
           std::make_unique<mtc::stages::ComputeIK>("grasp pose IK", std::move(stage));
@@ -249,18 +256,6 @@ mtc::Task MTCTaskNode::createTask()
       attach_object_stage = stage.get();
       grasp->insert(std::move(stage));
     }
-
-    // allow collision (object support)
-    // {
-    //   auto stage =
-    //       std::make_unique<mtc::stages::ModifyPlanningScene>("allow collision (object, support)");
-    //   stage->allowCollisions("object",
-    //                          task.getRobotModel()
-    //                              ->getJointModelGroup(hand_group_name)
-    //                              ->getLinkModelNamesWithCollisionGeometry(),
-    //                          true);
-    //   grasp->insert(std::move(stage));
-    // }
 
     // lift object stage
     {
