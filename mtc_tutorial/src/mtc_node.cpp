@@ -207,11 +207,11 @@ mtc::Task MTCTaskNode::createTask()
       stage->setAngleDelta(M_PI / 12);
       stage->setMonitoredStage(current_state_ptr);
 
-      //Eigen::Isometry3d grasp_frame_transform = Eigen::Isometry3d::Identity();
+      // Eigen::Isometry3d grasp_frame_transform = Eigen::Isometry3d::Identity();
       Eigen::Isometry3d grasp_frame_transform;
-      Eigen::Quaterniond q = Eigen::AngleAxisd(M_PI /2, Eigen::Vector3d::UnitX()) *
-                             Eigen::AngleAxisd(M_PI /2, Eigen::Vector3d::UnitY()) *
-                             Eigen::AngleAxisd(M_PI /2, Eigen::Vector3d::UnitZ());
+      Eigen::Quaterniond q = Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitX()) *
+                             Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitY()) *
+                             Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitZ());
       grasp_frame_transform.linear() = q.matrix();
       // grasp_frame_transform.translation().z() = 0.1;
 
@@ -346,7 +346,7 @@ mtc::Task MTCTaskNode::createTask()
     {
       auto stage = std::make_unique<mtc::stages::MoveRelative>("retreat", cartesian_planner);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-      stage->setMinMaxDistance(0.01, 0.3);
+      stage->setMinMaxDistance(0.1, 0.3);
       stage->setIKFrame(hand_frame);
       stage->properties().set("marker_ns", "retreat");
 
@@ -357,39 +357,37 @@ mtc::Task MTCTaskNode::createTask()
       stage->setDirection(vec);
       place->insert(std::move(stage));
     }
-    task.add(std::move(place));
+
+    {
+      auto stage = std::make_unique<mtc::stages::MoveTo>("return home", interpolation_planner);
+      stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
+      stage->setGoal("ready");
+      task.add(std::move(stage));
+    }
+
+    return task;
   }
 
+  int main(int argc, char **argv)
   {
-    auto stage = std::make_unique<mtc::stages::MoveTo>("return home", interpolation_planner);
-    stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-    stage->setGoal("ready");
-    task.add(std::move(stage));
-  }
- 
-  return task;
-}
+    rclcpp::init(argc, argv);
 
-int main(int argc, char **argv)
-{
-  rclcpp::init(argc, argv);
+    rclcpp::NodeOptions options;
+    options.automatically_declare_parameters_from_overrides(true);
 
-  rclcpp::NodeOptions options;
-  options.automatically_declare_parameters_from_overrides(true);
+    auto mtc_task_node = std::make_shared<MTCTaskNode>(options);
+    rclcpp::executors::MultiThreadedExecutor executor;
 
-  auto mtc_task_node = std::make_shared<MTCTaskNode>(options);
-  rclcpp::executors::MultiThreadedExecutor executor;
-
-  auto spin_thread = std::make_unique<std::thread>([&executor, &mtc_task_node]()
-                                                   {
+    auto spin_thread = std::make_unique<std::thread>([&executor, &mtc_task_node]()
+                                                     {
     executor.add_node(mtc_task_node->getNodeBaseInterface());
     executor.spin();
     executor.remove_node(mtc_task_node->getNodeBaseInterface()); });
 
-  mtc_task_node->setupPlanningScene();
-  mtc_task_node->doTask();
+    mtc_task_node->setupPlanningScene();
+    mtc_task_node->doTask();
 
-  spin_thread->join();
-  rclcpp::shutdown();
-  return 0;
-}
+    spin_thread->join();
+    rclcpp::shutdown();
+    return 0;
+  }
