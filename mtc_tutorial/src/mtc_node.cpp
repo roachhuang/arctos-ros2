@@ -53,12 +53,12 @@ void MTCTaskNode::setupPlanningScene()
   object.header.frame_id = "world";
   object.primitives.resize(1);
   object.primitives[0].type = shape_msgs::msg::SolidPrimitive::CYLINDER;
-  object.primitives[0].dimensions = {0.2, 0.01}; // height, radius
+  object.primitives[0].dimensions = {0.28, 0.01}; // height, radius
 
   geometry_msgs::msg::Pose pose;
   pose.position.x = 0.30;  // Closer to robot
   pose.position.y = -0.35; // Centered
-  pose.position.z = 0.10;  // set cylinder center height above table
+  pose.position.z = 0.14;  // 1/2 obj height. set cylinder center height above table
   pose.orientation.w = 1.0;
   object.pose = pose;
 
@@ -185,7 +185,7 @@ mtc::Task MTCTaskNode::createTask()
       stage->properties().set("marker_ns", "approach_object");
       stage->properties().set("link", hand_frame);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-      stage->setMinMaxDistance(0.0, 0.15);
+      stage->setMinMaxDistance(0.02, 0.15);
       stage->setIKFrame(hand_frame);
 
       // Set approach direction in hand_frame (gripper approach axis)
@@ -263,7 +263,7 @@ mtc::Task MTCTaskNode::createTask()
           std::make_unique<mtc::stages::MoveRelative>("lift object", cartesian_planner);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
       // lift 10~30cm from the current pose of the hand in the world frame
-      stage->setMinMaxDistance(0.1, 0.3);
+      stage->setMinMaxDistance(0.02, 0.3);
       stage->setIKFrame(hand_frame);
       stage->properties().set("marker_ns", "lift_object");
 
@@ -275,20 +275,12 @@ mtc::Task MTCTaskNode::createTask()
       grasp->insert(std::move(stage));
     }
 
-    // forbid collision (object support)
-    // {
-    // 	auto stage = std::make_unique<stages::ModifyPlanningScene>("forbid collision (object,surface)");
-    // 	stage->allowCollisions("object", { params.surface_link }, false);
-    // 	grasp->insert(std::move(stage));
-    // }
-
     pick_stage_ptr = grasp.get(); // remember for monitoring place pose generator
 
     // add grasp container to task
     task.add(std::move(grasp));
   }
-
-  /* place stages commented out
+  //////////////////////////////////////////////////////////////////////
   {
     auto stage_move_to_place = std::make_unique<mtc::stages::Connect>(
         "move to place",
@@ -314,7 +306,8 @@ mtc::Task MTCTaskNode::createTask()
 
       geometry_msgs::msg::PoseStamped target_pose_msg;
       target_pose_msg.header.frame_id = "object";
-      target_pose_msg.pose.position.y = 0.5;
+      // target_pose_msg.pose.position.x = -0.2;
+      target_pose_msg.pose.position.x = -0.55;
       target_pose_msg.pose.orientation.w = 1.0;
       stage->setPose(target_pose_msg);
       stage->setMonitoredStage(attach_object_stage); // Hook into attach_object_stage
@@ -353,14 +346,14 @@ mtc::Task MTCTaskNode::createTask()
     {
       auto stage = std::make_unique<mtc::stages::MoveRelative>("retreat", cartesian_planner);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-      stage->setMinMaxDistance(0.1, 0.3);
+      stage->setMinMaxDistance(0.01, 0.3);
       stage->setIKFrame(hand_frame);
       stage->properties().set("marker_ns", "retreat");
 
       // Set retreat direction
       geometry_msgs::msg::Vector3Stamped vec;
       vec.header.frame_id = "world";
-      vec.vector.x = -0.5;
+      vec.vector.x = -0.3;
       stage->setDirection(vec);
       place->insert(std::move(stage));
     }
@@ -373,8 +366,7 @@ mtc::Task MTCTaskNode::createTask()
     stage->setGoal("ready");
     task.add(std::move(stage));
   }
- */
-
+ 
   return task;
 }
 
