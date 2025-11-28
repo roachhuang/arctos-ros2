@@ -95,8 +95,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         declare_use_fake_hardware,
-        static_tf,
         robot_state_publisher_node,
+        static_tf,        
         controller_manager_node,
         spawn_joint_state_broadcaster,
         spawn_arm_controller,

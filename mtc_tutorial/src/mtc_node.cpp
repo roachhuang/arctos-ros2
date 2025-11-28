@@ -297,6 +297,7 @@ mtc::Task MTCTaskNode::createTask()
     task.properties().exposeTo(place->properties(), {"eef", "group", "ik_frame"});
     place->properties().configureInitFrom(mtc::Stage::PARENT,
                                           {"eef", "group", "ik_frame"});
+
     {
       // Sample place pose
       auto stage = std::make_unique<mtc::stages::GeneratePlacePose>("generate place pose");
@@ -307,7 +308,7 @@ mtc::Task MTCTaskNode::createTask()
       geometry_msgs::msg::PoseStamped target_pose_msg;
       target_pose_msg.header.frame_id = "object";
       // target_pose_msg.pose.position.x = -0.2;
-      target_pose_msg.pose.position.x = -0.1;
+      target_pose_msg.pose.position.y = -0.13;
       target_pose_msg.pose.orientation.w = 1.0;
       stage->setPose(target_pose_msg);
       stage->setMonitoredStage(attach_object_stage); // Hook into attach_object_stage
@@ -349,12 +350,13 @@ mtc::Task MTCTaskNode::createTask()
       stage->setMinMaxDistance(0.02, 0.3);
       stage->setIKFrame(hand_frame);
       stage->properties().set("marker_ns", "retreat");
-      stage->properties().set("link", hand_frame);
+      // stage->properties().set("link", hand_frame);
 
       // Set retreat direction
       geometry_msgs::msg::Vector3Stamped vec;
-      vec.header.frame_id = "hand_frame";
-      vec.vector.x = -1.0;
+      vec.header.frame_id = hand_frame;
+      // vec.header.frame_id = "world";
+      vec.vector.z = 1.0;
       stage->setDirection(vec);
       place->insert(std::move(stage));
     }
