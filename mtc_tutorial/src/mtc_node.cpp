@@ -184,13 +184,13 @@ mtc::Task MTCTaskNode::createTask()
       stage->properties().set("marker_ns", "approach_object");
       stage->properties().set("link", hand_frame);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-      stage->setMinMaxDistance(0.02, 0.15);
+      stage->setMinMaxDistance(0.0, 0.15);
       stage->setIKFrame(hand_frame);
 
       // Set approach direction in hand_frame (gripper approach axis)
       geometry_msgs::msg::Vector3Stamped vec;
       vec.header.frame_id = hand_frame;
-      vec.vector.y = -1.0; // Approach along -Y axis of gripper
+      vec.vector.x = 1.0; // Approach along -Y axis of gripper
 
       stage->setDirection(vec);
       grasp->insert(std::move(stage));
@@ -349,11 +349,12 @@ mtc::Task MTCTaskNode::createTask()
       stage->setMinMaxDistance(0.02, 0.3);
       stage->setIKFrame(hand_frame);
       stage->properties().set("marker_ns", "retreat");
+      stage->properties().set("link", hand_frame);
 
       // Set retreat direction
       geometry_msgs::msg::Vector3Stamped vec;
       vec.header.frame_id = "hand_frame";
-      vec.vector.y = 1.0;
+      vec.vector.x = -1.0;
       stage->setDirection(vec);
       place->insert(std::move(stage));
     }
