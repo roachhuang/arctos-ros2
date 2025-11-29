@@ -109,6 +109,7 @@ mtc::Task MTCTaskNode::createTask()
   const auto &arm_group_name = "arm";
   const auto &hand_group_name = "gripper";
   const auto &hand_frame = "Gripper_1";
+  // const auto &hand_frame = "tcp_link";
 
   // Set task properties
   task.setProperty("group", arm_group_name);
@@ -350,7 +351,7 @@ mtc::Task MTCTaskNode::createTask()
       stage->setMinMaxDistance(0.02, 0.3);
       stage->setIKFrame(hand_frame);
       stage->properties().set("marker_ns", "retreat");
-      // stage->properties().set("link", hand_frame);
+      stage->properties().set("link", hand_frame);
 
       // Set retreat direction
       geometry_msgs::msg::Vector3Stamped vec;
