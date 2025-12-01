@@ -30,25 +30,38 @@ def generate_launch_description():
         'rviz',
         'mtc.rviz'
     )
-
-    yaml_path = os.path.join(
-        get_package_share_directory("arctos_bringup"),
-        "config",
-        "ros2_controllers.yaml"
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        arguments=['-d', rviz_config_path],
     )
-
+   
+    
+    # publish Transforms to tf2 ###########################################
+    # Static TF from world to base_link
     static_tf = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
-        arguments=["0", "0", "0", "0", "0", "0", "1", "world", "base_link"],
+        name="static_transform_publisher",
+        output="log",
+        arguments=["--frame-id", "world", "--child-frame-id", "base_link"],
     )
-
+    # publish TF  
     robot_state_publisher_node = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
         parameters=[{'robot_description': robot_description_content}],
     )
+    ############################################################################
 
+    
+    ### ros2_control Node and Spawners
+    yaml_path = os.path.join(
+        get_package_share_directory("arctos_bringup"),
+        "config",
+        "ros2_controllers.yaml"
+    )
+    
     controller_manager_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
@@ -76,6 +89,7 @@ def generate_launch_description():
         executable="spawner",
         arguments=["gripper_controller", "--controller-manager-timeout", "60"],
     )
+    ############################################################################
 
     moveit = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -87,21 +101,15 @@ def generate_launch_description():
         )
     )
 
-    rviz_node = Node(
-        package='rviz2',
-        executable='rviz2',
-        arguments=['-d', rviz_config_path],
-    )
-
     return LaunchDescription([
         declare_use_fake_hardware,
-        robot_state_publisher_node,
+        rviz_node,
         static_tf,        
+        robot_state_publisher_node,
+        moveit,        
         controller_manager_node,
         spawn_joint_state_broadcaster,
         spawn_arm_controller,
         spawn_gripper_controller,
-        moveit,
-        rviz_node,
         # spawn_commander,  # add if you want commander running
     ])
