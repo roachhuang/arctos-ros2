@@ -56,8 +56,8 @@ void MTCTaskNode::setupPlanningScene()
   object.primitives[0].dimensions = {0.28, 0.01}; // height, radius
 
   geometry_msgs::msg::Pose pose;
-  pose.position.x = 0.30;  // Closer to robot
-  pose.position.y = -0.35; // Centered
+  pose.position.x = 0.32;  // Closer to robot
+  pose.position.y = -0.36; // Centered
   pose.position.z = 0.14;  // 1/2 obj height. set cylinder center height above table
   pose.orientation.w = 1.0;
   object.pose = pose;
