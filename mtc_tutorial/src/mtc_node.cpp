@@ -178,6 +178,7 @@ mtc::Task MTCTaskNode::createTask()
     task.properties().exposeTo(grasp->properties(), {"eef", "group", "ik_frame"});
     grasp->properties().configureInitFrom(mtc::Stage::PARENT, {"eef", "group", "ik_frame"});
 
+    // approach object stage
     {
       auto stage =
           std::make_unique<mtc::stages::MoveRelative>("approach object", cartesian_planner);
@@ -191,7 +192,7 @@ mtc::Task MTCTaskNode::createTask()
       // Set approach direction in hand_frame (gripper approach axis)
       geometry_msgs::msg::Vector3Stamped vec;
       vec.header.frame_id = hand_frame;
-      vec.vector.x = 1.0; // move in the x direction in hand frame
+      vec.vector.y = -1.0; // move in the x direction in hand frame
       stage->setDirection(vec);
       grasp->insert(std::move(stage));
     }
@@ -241,6 +242,7 @@ mtc::Task MTCTaskNode::createTask()
                              true);
       grasp->insert(std::move(stage));
     }
+
     // close hand stage
     {
       auto stage = std::make_unique<mtc::stages::MoveTo>("close hand", interpolation_planner);
@@ -312,7 +314,7 @@ mtc::Task MTCTaskNode::createTask()
       target_pose_msg.pose.position.y = -0.13;
       target_pose_msg.pose.orientation.w = 1.0;
       stage->setPose(target_pose_msg);
-      // use the prev attach obj stage 
+      // use the prev attach obj stage
       stage->setMonitoredStage(attach_object_stage); // Hook into attach_object_stage
 
       // Compute IK
@@ -325,13 +327,16 @@ mtc::Task MTCTaskNode::createTask()
       wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, {"target_pose"});
       place->insert(std::move(wrapper));
     }
+
+    // open hand stage
     {
       auto stage = std::make_unique<mtc::stages::MoveTo>("open hand", interpolation_planner);
       stage->setGroup(hand_group_name);
       stage->setGoal("open");
       place->insert(std::move(stage));
     }
-    
+
+    // forbid collision between hand and obj when placing
     {
       auto stage =
           std::make_unique<mtc::stages::ModifyPlanningScene>("forbid collision (hand,object)");
@@ -342,11 +347,15 @@ mtc::Task MTCTaskNode::createTask()
                              false);
       place->insert(std::move(stage));
     }
+
+    // detach object stage
     {
       auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("detach object");
       stage->detachObject("object", hand_frame);
       place->insert(std::move(stage));
     }
+
+    // retreat stage
     {
       auto stage = std::make_unique<mtc::stages::MoveRelative>("retreat", cartesian_planner);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
@@ -359,7 +368,7 @@ mtc::Task MTCTaskNode::createTask()
       geometry_msgs::msg::Vector3Stamped vec;
       vec.header.frame_id = hand_frame;
       // vec.header.frame_id = "world";
-      vec.vector.z = 1.0;
+      vec.vector.y = 0.2;
       stage->setDirection(vec);
       place->insert(std::move(stage));
     }
@@ -370,7 +379,7 @@ mtc::Task MTCTaskNode::createTask()
   {
     auto stage = std::make_unique<mtc::stages::MoveTo>("return home", interpolation_planner);
     stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-    stage->setGoal("ready");
+    stage->setGoal("home");
     task.add(std::move(stage));
   }
 
