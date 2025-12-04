@@ -186,7 +186,7 @@ mtc::Task MTCTaskNode::createTask()
       stage->properties().set("link", hand_frame);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
       // make sure to approach pose is 0-15cm away from the grasp pose.
-      stage->setMinMaxDistance(0.0, 0.15);
+      stage->setMinMaxDistance(0.01, 0.15);
       // stage->setIKFrame(hand_frame);
 
       // Set approach direction in hand_frame (gripper approach axis)
@@ -213,9 +213,8 @@ mtc::Task MTCTaskNode::createTask()
                              Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitY()) *
                              Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitZ());
       grasp_frame_transform.linear() = q.matrix();
-      // grasp_frame_transform.translation().z() = 0.1;
-
-      grasp_frame_transform.translation().y() = -0.06; // Offset to center of jaws
+      
+      grasp_frame_transform.translation().y() = -0.06; // Offset to center of jaws (TCP)
       // Rotate 90 degrees around Y-axis so gripper X-axis points up (aligned with object Z-axis)
       // grasp_frame_transform.rotate(Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitY()));
 
@@ -310,8 +309,9 @@ mtc::Task MTCTaskNode::createTask()
 
       geometry_msgs::msg::PoseStamped target_pose_msg;
       target_pose_msg.header.frame_id = "object";
-      // target_pose_msg.pose.position.x = -0.2;
+      target_pose_msg.pose.position.x = -0.65;
       target_pose_msg.pose.position.y = -0.13;
+      // target_pose_msg.pose.position.y = 0.36;
       target_pose_msg.pose.orientation.w = 1.0;
       stage->setPose(target_pose_msg);
       // use the prev attach obj stage
