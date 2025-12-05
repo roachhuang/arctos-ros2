@@ -22,7 +22,8 @@ namespace arctos_hardware_interface
   class ArctosHardwareInterface : public hw::SystemInterface
   {
   public:
-    static constexpr int ENCODER_CPR = 16384;
+    // Document what this constant represents (counts per revolution for the encoder)
+    static constexpr int ENCODER_COUNTS_PER_REVOLUTION = 16384;
     static constexpr double POSITION_CHANGE_THRESHOLD = 0.001;
     static constexpr double VELOCITY_EPSILON = 1e-9;
     static constexpr double TWO_PI = 2.0 * M_PI;
@@ -32,14 +33,14 @@ namespace arctos_hardware_interface
     {
       if (std::abs(gear_ratio) < 1e-9)
         return 0.0; // Prevent division by near-zero
-      return static_cast<double>(counts) / ENCODER_CPR * TWO_PI / gear_ratio;
+      return static_cast<double>(counts) / ENCODER_COUNTS_PER_REVOLUTION * TWO_PI / gear_ratio;
     }
 
     inline int32_t radiansToCounts(double radians, double gear_ratio) const
     {
       if (std::abs(gear_ratio) < 1e-9)
         return 0; // Prevent division by near-zero
-      return static_cast<int32_t>(radians * gear_ratio / TWO_PI * ENCODER_CPR);
+      return static_cast<int32_t>(radians * gear_ratio / TWO_PI * ENCODER_COUNTS_PER_REVOLUTION);
     }
 
     // SystemInterface overrides
@@ -80,6 +81,19 @@ namespace arctos_hardware_interface
     std::vector<bool> in1_;
     // IN_2 (end lmt)
     std::vector<bool> in2_;
+
+    // Group related state together (single responsibility)
+    struct JointState
+    {
+      double position;
+      double velocity;
+      double command;
+      bool is_homing;
+      bool limit_switch_in1;
+      bool limit_switch_in2;
+    };
+    std::vector<JointState> _joint_states;
+
     // Helper methods
     void initializeJointData();
     // void loadJointParameters();

@@ -213,7 +213,7 @@ mtc::Task MTCTaskNode::createTask()
                              Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitY()) *
                              Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitZ());
       grasp_frame_transform.linear() = q.matrix();
-      
+
       grasp_frame_transform.translation().y() = -0.06; // Offset to center of jaws (TCP)
       // Rotate 90 degrees around Y-axis so gripper X-axis points up (aligned with object Z-axis)
       // grasp_frame_transform.rotate(Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitY()));
@@ -312,7 +312,14 @@ mtc::Task MTCTaskNode::createTask()
       target_pose_msg.pose.position.x = -0.65;
       target_pose_msg.pose.position.y = -0.13;
       // target_pose_msg.pose.position.y = 0.36;
-      target_pose_msg.pose.orientation.w = 1.0;
+      // target_pose_msg.pose.orientation.w = 1.0;
+      // *** NEW CODE TO FLIP OBJECT 180 DEGREES AROUND X-AXIS ***
+      target_pose_msg.pose.orientation.x = 1.0;
+      target_pose_msg.pose.orientation.y = 0.0;
+      target_pose_msg.pose.orientation.z = 0.0;
+      target_pose_msg.pose.orientation.w = 0.0;
+      // *********************************************************
+
       stage->setPose(target_pose_msg);
       // use the prev attach obj stage
       stage->setMonitoredStage(attach_object_stage); // Hook into attach_object_stage
