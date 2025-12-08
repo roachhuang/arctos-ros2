@@ -15,8 +15,8 @@ namespace mks_servo_driver
     MksServoDriver::MksServoDriver()
     {
         positions_.resize(6, 0);
-        in1_states_.resize(6, false);
-        in2_states_.resize(6, false);
+        in1_states_.resize(6, true);    // low activate
+        in2_states_.resize(6, true);
         command_status_.resize(6, 0);
         homing_status_.resize(6, 0);
     }
@@ -107,9 +107,9 @@ namespace mks_servo_driver
         tx.can_dlc = data.size();
         std::memcpy(tx.data, data.data(), tx.can_dlc);
 
-        auto now = std::chrono::steady_clock::now();
-        auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-        RCLCPP_INFO(LOGGER, "t_can_tx time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
+        // auto now = std::chrono::steady_clock::now();
+        // auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+        // RCLCPP_INFO(LOGGER, "t_can_tx time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
 
         return write(sock_, &tx, sizeof(tx)) == sizeof(tx);
     }
@@ -231,17 +231,17 @@ namespace mks_servo_driver
         return sendCmd(id, CANCommands::READ_IO, {});
     }
 
-    std::vector<bool> MksServoDriver::getIN1States()
-    {
-        std::lock_guard<std::mutex> lock(io_mutex_);
-        return in1_states_;
-    }
+    // std::vector<bool> MksServoDriver::getIN1States()
+    // {
+    //     std::lock_guard<std::mutex> lock(io_mutex_);
+    //     return in1_states_;
+    // }
 
-    std::vector<bool> MksServoDriver::getIN2States()
-    {
-        std::lock_guard<std::mutex> lock(io_mutex_);
-        return in2_states_;
-    }
+    // std::vector<bool> MksServoDriver::getIN2States()
+    // {
+    //     std::lock_guard<std::mutex> lock(io_mutex_);
+    //     return in2_states_;
+    // }
 
     bool MksServoDriver::getIN1State(uint16_t id)
     {
@@ -279,6 +279,7 @@ namespace mks_servo_driver
         return homing_status_;
     }
 
+    // runs every 5ms
     void MksServoDriver::pollLoop()
     {
         int query_counter = 0;
@@ -343,9 +344,9 @@ namespace mks_servo_driver
                 /* total round‑trip latency: t_servo_feedback - t_moveit_send
                 Adjust vel and acc until latency is consistent and trajectories feel smooth.
                 */
-                auto now = std::chrono::steady_clock::now();
-                auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-                RCLCPP_INFO(LOGGER, "servo response time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
+                // auto now = std::chrono::steady_clock::now();
+                // auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+                // RCLCPP_INFO(LOGGER, "servo response time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
                 int64_t position = toI48(&frame.data[1]);
                 size_t idx = frame.can_id - 1;
                 std::lock_guard<std::mutex> lock(pos_mutex_);

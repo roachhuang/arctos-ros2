@@ -31,8 +31,8 @@ namespace arctos_hardware_interface
         num_joints_ = info_.joints.size();
         // This flag controls the logic in read()
         is_homing_.resize(num_joints_, false);
-        in1_.resize(num_joints_, false);
-        in2_.resize(num_joints_, false);
+        // in1_.resize(num_joints_, false);
+        // in2_.resize(num_joints_, false);
         position_commands_.resize(num_joints_, 0.0);
         position_states_.resize(num_joints_, 0.0);
         velocity_states_.resize(num_joints_, 0.0);
@@ -214,7 +214,7 @@ namespace arctos_hardware_interface
             if (is_homing_[i])
             {
                 // If homing, we EXPECT to hit the switch.
-                if (can_driver_.getIN1State(can_ids_[i]))
+                if (!can_driver_.getIN1State(can_ids_[i]))
                 {
                     RCLCPP_INFO(LOGGER,
                                 "Joint '%s' homing complete. Switch triggered.", info_.joints[i].name.c_str());
@@ -226,10 +226,11 @@ namespace arctos_hardware_interface
                     can_driver_.setZero(can_ids_[i]);
                 }
             }
+            /*
             else
             {
-                // If NOT homing, hitting a limit switch is an EMERGENCY.
-                if (can_driver_.getIN1State(can_ids_[i]) || can_driver_.getIN2State(can_ids_[i]))
+                // If NOT homing, hitting a limit switch (low active) is an EMERGENCY.
+                if (!can_driver_.getIN1State(can_ids_[i]) || !can_driver_.getIN2State(can_ids_[i]))
                 {
                     RCLCPP_FATAL(LOGGER,
                                  "HARDWARE LIMIT HIT on joint '%s' unexpectedly!", info_.joints[i].name.c_str());
@@ -241,6 +242,7 @@ namespace arctos_hardware_interface
                     return hardware_interface::return_type::ERROR;
                 }
             }
+            */
             double prev = position_states_[i];
             double rad = countsToRadians(positions[i], gear_ratios_[i]);
             rad = std::fmod(rad + M_PI, 2.0 * M_PI) - M_PI;

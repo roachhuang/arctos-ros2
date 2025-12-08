@@ -1,59 +1,70 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-   
+  
+  <!-- ARGUMENT TO TOGGLE FAKE HARDWARE -->
+  <xacro:arg name="use_fake_hardware" default="false"/>
+
+  <!-- JOINT MACRO -->
   <xacro:macro name="arctos_joint" params="name can_id gear_ratio">
     <joint name="${name}">
-      <param name='can_id'>${can_id}</param>
-      <param name='gear_ratio'>${gear_ratio}</param>
-      
+      <param name="can_id">${can_id}</param>
+      <param name="gear_ratio">${gear_ratio}</param>
+
       <command_interface name="position"/>
-      
+
       <state_interface name="position">
         <param name="initial_value">0.0</param>
       </state_interface>
       <state_interface name="velocity">
         <param name="initial_value">0.0</param>
       </state_interface>
-      <!-- <state_interface name="effort">
-        <param name="initial_value">0.0</param>
-      </state_interface> -->
     </joint>
   </xacro:macro>
 
-  <xacro:arg name="use_fake_hardware" default="true"/>
+  <!-- ROS2 CONTROL MACRO -->
+  <xacro:macro name="arctos_ros2_control" params="use_fake_hardware:=false">
 
-  <ros2_control name="arm" type="system">
-    <hardware>
-      <xacro:if value="$(arg use_fake_hardware)">
+    <ros2_control name="arm" type="system">
+      <hardware>
+        <xacro:if value="$(arg use_fake_hardware)">
+          <plugin>mock_components/GenericSystem</plugin>
+        </xacro:if>
+
+        <xacro:unless value="$(arg use_fake_hardware)">
+          <plugin>arctos_hardware_interface/ArctosHardwareInterface</plugin>
+          <class_type>arctos_hardware_interface::ArctosHardwareInterface</class_type>
+
+          <param name="can_interface">can0</param>
+          <param name="accel">10</param>
+          <param name="vel">100</param>
+        </xacro:unless>
+      </hardware>
+
+      <!-- JOINT DEFINITIONS -->
+      <xacro:arctos_joint name="X_joint" can_id="1" gear_ratio="13.5"/>
+      <xacro:arctos_joint name="Y_joint" can_id="2" gear_ratio="150.0"/>
+      <xacro:arctos_joint name="Z_joint" can_id="3" gear_ratio="150.0"/>
+      <xacro:arctos_joint name="A_joint" can_id="4" gear_ratio="48.0"/>
+      <xacro:arctos_joint name="B_joint" can_id="5" gear_ratio="67.82"/>
+      <xacro:arctos_joint name="C_joint" can_id="6" gear_ratio="67.82"/>
+    </ros2_control>
+
+    <ros2_control name="gripper" type="system">
+      <hardware>
         <plugin>mock_components/GenericSystem</plugin>
-      </xacro:if>
-      <xacro:unless value="$(arg use_fake_hardware)">    
-        <plugin>mock_components/GenericSystem</plugin>
-        <!-- <plugin>arctos_hardware_interface/ArctosHardwareInterface</plugin> -->
-        <param name='can_interface'>can0</param>
-        <param name='accel'>10</param> 
-        <param name='vel'>100</param>
-      </xacro:unless>
-    </hardware>
-    
-    <xacro:arctos_joint name="X_joint" can_id="1" gear_ratio="13.5"/>
-    <xacro:arctos_joint name="Y_joint" can_id="2" gear_ratio="150.0"/>
-    <xacro:arctos_joint name="Z_joint" can_id="3" gear_ratio="150.0"/>
-    <xacro:arctos_joint name="A_joint" can_id="4" gear_ratio="48.0"/>
-    <xacro:arctos_joint name="B_joint" can_id="5" gear_ratio="67.82"/>
-    <xacro:arctos_joint name="C_joint" can_id="6" gear_ratio="67.82"/>   
-  </ros2_control>
+      </hardware>
 
-  <ros2_control name="gripper" type="system">
-    <hardware>
-      <plugin>mock_components/GenericSystem</plugin>
-    </hardware>
-    <joint name="Right_jaw_joint">
-      <command_interface name="position"/>
-      <state_interface name="position">
-        <param name="initial_value">0.0</param>
-      </state_interface>
-    </joint>
-  </ros2_control>
+      <joint name="Right_jaw_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+      </joint>
+    </ros2_control>
 
-  </robot>
+  </xacro:macro>
+  
+  <!-- INSTANTIATE THE MACRO -->
+  <xacro:arctos_ros2_control use_fake_hardware="$(arg use_fake_hardware)"/>
+
+</robot>

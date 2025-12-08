@@ -78,9 +78,9 @@ namespace arctos_hardware_interface
     // std::vector<double> prev_position_commands_;
     std::vector<bool> is_homing_;
     // IN_1 (home lmt)
-    std::vector<bool> in1_;
+    // std::vector<bool> in1_;
     // IN_2 (end lmt)
-    std::vector<bool> in2_;
+    // std::vector<bool> in2_;
 
     // Group related state together (single responsibility)
     struct JointState
