@@ -98,21 +98,20 @@ namespace arctos_hardware_interface
     CallbackReturn ArctosHardwareInterface::on_activate(const rclcpp_lifecycle::State &previous_state)
     {
         (void)previous_state;
-        RCLCPP_DEBUG(LOGGER, "Activating hardware...");
-        // for (size_t i = 0; i < info_.joints.size(); i++)
-        // for (size_t i = 1; i < 3; i++)
-        // {
-
-        //     // const auto &joint_name = info_.joints[i].name;
-        //     if (!can_driver_.enableMotor(can_ids_[i], true))
-        //     {
-        //         RCLCPP_ERROR(LOGGER,
-        //                      "Failed to enable motor %zu", i);
-        //         return CallbackReturn::ERROR;
-        //     }
-
-        //     // }
-        // }
+        RCLCPP_INFO(LOGGER, "Activating hardware and enabling motors...");
+        
+        for (size_t i = 0; i < num_joints_; i++)
+        {
+            if (!can_driver_.enableMotor(can_ids_[i], true))
+            {
+                RCLCPP_ERROR(LOGGER,
+                             "Failed to enable motor for joint '%s' (CAN ID: %d)",
+                             info_.joints[i].name.c_str(), can_ids_[i]);
+                return CallbackReturn::ERROR;
+            }
+            RCLCPP_INFO(LOGGER, "Motor enabled for joint '%s'", info_.joints[i].name.c_str());
+        }
+        
         return CallbackReturn::SUCCESS;
     }
 
@@ -286,19 +285,28 @@ namespace arctos_hardware_interface
 
     hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &time, const rclcpp::Duration & /*period*/)
     {
+        static int write_count = 0;
+        if (write_count++ % 100 == 0) {
+            RCLCPP_INFO(LOGGER, "Write called %d times", write_count);
+        }
+        
         for (size_t i = 0; i < num_joints_; ++i)
         {
             // Only send command if NOT homing (homing is a special "search" move)
-            if (!is_homing_[i])
+
+            double cmd = position_commands_[i];
+            if (std::fabs(cmd - position_states_[i]) > POSITION_CHANGE_THRESHOLD)
             {
-                double cmd = position_commands_[i];
-                if (std::fabs(cmd - position_states_[i]) > POSITION_CHANGE_THRESHOLD)
-                {
-                    RCLCPP_DEBUG(LOGGER,
-                                 "t_ros2_write: %ld.%09ld", time.nanoseconds() / 1000000000, time.nanoseconds() % 1000000000);
-                    int32_t target_pos = radiansToCounts(cmd, gear_ratios_[i]);
-                    can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
-                }
+                RCLCPP_INFO(LOGGER,
+                             "Sending command to joint '%s': %.3f rad (current: %.3f)",
+                             info_.joints[i].name.c_str(), cmd, position_states_[i]);
+                int32_t target_pos = radiansToCounts(cmd, gear_ratios_[i]);
+                can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
+            }
+            else{
+                RCLCPP_DEBUG(LOGGER,
+                             "No significant command change for joint '%s'; skipping command.",
+                             info_.joints[i].name.c_str());
             }
         }
 
