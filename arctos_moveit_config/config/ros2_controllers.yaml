@@ -31,6 +31,7 @@ arm_controller:
 gripper_controller:
   ros__parameters:
     joints:
+      - Right_jaw_joint
       - Left_jaw_joint
     command_interfaces:
       - position

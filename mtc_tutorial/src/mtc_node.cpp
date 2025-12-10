@@ -68,6 +68,7 @@ void MTCTaskNode::setupPlanningScene()
 
 void MTCTaskNode::doTask()
 {
+ 
   task_ = createTask();
 
   try
