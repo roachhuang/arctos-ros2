@@ -70,7 +70,7 @@ namespace mks_servo_driver
         void setZero(uint16_t id);
         uint8_t setZeroSync(uint16_t id, int timeout_ms = 100);
         void setHoldingCurrent(uint16_t id, uint8_t percentage);
-        void home(uint16_t id);
+        void home(uint8_t);
         uint8_t homeSync(uint16_t id, int timeout_ms = 5000);
         void EmergencyStop(uint16_t id);
         bool queryIO(uint16_t id);
@@ -85,8 +85,15 @@ namespace mks_servo_driver
         std::vector<bool> getIN2States();
         bool getIN1State(uint16_t id);
         bool getIN2State(uint16_t id);
-        std::vector<uint8_t> getCommandStatus();
-        std::vector<uint8_t> getHomingStatus();
+        uint8_t getCommandStatus(u_int16_t);
+        uint8_t getHomingStatus(u_int16_t id);
+
+        inline size_t can_index(uint16_t can_id)
+        {
+            // Optional: add runtime check in debug builds
+            // assert(can_id >= 1 && can_id <= 6);
+            return static_cast<size_t>(can_id - 1);
+        }
 
     private:
         int sock_{-1};

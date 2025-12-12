@@ -15,7 +15,7 @@ namespace mks_servo_driver
     MksServoDriver::MksServoDriver()
     {
         positions_.resize(6, 0);
-        in1_states_.resize(6, true);    // low activate
+        in1_states_.resize(6, true); // low activate
         in2_states_.resize(6, true);
         command_status_.resize(6, 0);
         homing_status_.resize(6, 0);
@@ -174,9 +174,9 @@ namespace mks_servo_driver
         return positions_;
     }
 
-    void MksServoDriver::home(uint16_t id)
+    void MksServoDriver::home(uint8_t can_id)
     {
-        sendCmd(id, CANCommands::GO_HOME, {});
+        sendCmd(can_id, CANCommands::GO_HOME, {});
     }
 
     uint8_t MksServoDriver::sendCmdSync(uint16_t id, uint8_t cmd, const std::vector<uint8_t> &params, int timeout_ms, bool use_homing_status)
@@ -248,7 +248,7 @@ namespace mks_servo_driver
         if (id < 1 || id > 6)
             return false;
         std::lock_guard<std::mutex> lock(io_mutex_);
-        return in1_states_[id];
+        return in1_states_[can_index(id)];
     }
 
     bool MksServoDriver::getIN2State(uint16_t id)
@@ -256,27 +256,33 @@ namespace mks_servo_driver
         if (id < 1 || id > 6)
             return false;
         std::lock_guard<std::mutex> lock(io_mutex_);
-        return in2_states_[id];
+        return in2_states_[can_index(id)];
     }
 
     int64_t MksServoDriver::getPosition(uint16_t id)
     {
         if (id < 1 || id > 6)
-            return 0;
+            return false;
         std::lock_guard<std::mutex> lock(pos_mutex_);
-        return positions_[id - 1];
+        return positions_[can_index(id)];
     }
+    uint8_t MksServoDriver::getCommandStatus(uint16_t id)
+    {
+        if (id < 1 || id > 6)
+            return 0xFF;
+        std::lock_guard<std::mutex> lock(status_mutex_);
+        return command_status_[can_index(id)];
+    }
+    // std::vector<uint8_t> MksServoDriver::getCommandStatus()
+    // {
+    //     std::lock_guard<std::mutex> lock(status_mutex_);
+    //     return command_status_;
+    // }
 
-    std::vector<uint8_t> MksServoDriver::getCommandStatus()
+    uint8_t MksServoDriver::getHomingStatus(uint16_t id)
     {
         std::lock_guard<std::mutex> lock(status_mutex_);
-        return command_status_;
-    }
-
-    std::vector<uint8_t> MksServoDriver::getHomingStatus()
-    {
-        std::lock_guard<std::mutex> lock(status_mutex_);
-        return homing_status_;
+        return homing_status_[can_index(id)];
     }
 
     // runs every 5ms
@@ -336,6 +342,13 @@ namespace mks_servo_driver
 
     std::optional<int64_t> MksServoDriver::processCanFrame(const can_frame &frame)
     {
+        uint16_t can_id = frame.can_id;
+        if (can_id < 1 || can_id > 6)
+        {
+            RCLCPP_ERROR(LOGGER, "Received frame with invalid CAN ID: %u", can_id);
+            return std::nullopt;
+        }
+        size_t idx = can_index(can_id);
         switch (frame.data[0])
         {
         case CANCommands::READ_ENCODER:
@@ -348,7 +361,6 @@ namespace mks_servo_driver
                 // auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
                 // RCLCPP_INFO(LOGGER, "servo response time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
                 int64_t position = toI48(&frame.data[1]);
-                size_t idx = frame.can_id - 1;
                 std::lock_guard<std::mutex> lock(pos_mutex_);
                 positions_[idx] = position;
             }
@@ -359,8 +371,6 @@ namespace mks_servo_driver
             if (frame.can_dlc == 3)
             {
                 uint8_t io_status = frame.data[1];
-                size_t idx = frame.can_id - 1;
-
                 std::lock_guard<std::mutex> lock(io_mutex_);
                 // EN pins active low
                 in1_states_[idx] = (io_status & 0x01) == 0; // Bit 0: IN_1
@@ -374,8 +384,6 @@ namespace mks_servo_driver
             if (frame.can_dlc >= 3 && frame.can_id >= 1 && frame.can_id <= 6)
             {
                 uint8_t status = frame.data[1];
-                size_t idx = frame.can_id - 1;
-
                 std::lock_guard<std::mutex> lock(status_mutex_);
                 homing_status_[idx] = status;
             }
@@ -388,8 +396,6 @@ namespace mks_servo_driver
             if (frame.can_dlc >= 3 && frame.can_id >= 1 && frame.can_id <= 6)
             {
                 uint8_t status = frame.data[1];
-                size_t idx = frame.can_id - 1;
-
                 std::lock_guard<std::mutex> lock(status_mutex_);
                 command_status_[idx] = status;
             }

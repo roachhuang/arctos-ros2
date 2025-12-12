@@ -1,4 +1,3 @@
-
 import os
 from ament_index_python.packages import get_package_share_directory
 
@@ -192,6 +191,7 @@ def generate_launch_description():
         arguments=["-d", rviz_config],
         output="screen",
     )
+    
     # Trajectory Execution Functionality
     moveit_simple_controllers_yaml = load_yaml(
         'arctos_moveit_config', 'config/moveit_controllers.yaml'
@@ -224,9 +224,18 @@ def generate_launch_description():
         )      
     )
 
-    # -----------------------------
-    # Order: controller_manager → JSB → arm → gripper → RViz → MoveIt
-    # -----------------------------
+    # ================================================================================
+    # EVENT HANDLERS: Chain startup in order
+    # Execution order:
+    # 1. controller_manager (manual start)
+    # 2. joint_state_broadcaster (after controller_manager starts)
+    # 3. arm_controller (after jsb_spawner exits)
+    # 4. gripper_controller (after arm_spawner exits)
+    # 5. moveit (parallel, after gripper spawned)
+    # 6. rviz (parallel, after gripper spawned)
+    # ================================================================================
+    
+    # Arm controller starts after joint_state_broadcaster spawner exits
     start_arm = RegisterEventHandler(
         OnProcessExit(
             target_action=jsb_spawner,
@@ -234,6 +243,7 @@ def generate_launch_description():
         )
     )
 
+    # Gripper controller starts after arm_controller spawner exits
     start_gripper = RegisterEventHandler(
         OnProcessExit(
             target_action=arm_spawner,
@@ -241,27 +251,15 @@ def generate_launch_description():
         )
     )
 
-    start_rviz = RegisterEventHandler(
-        OnProcessExit(
-            target_action=gripper_spawner,
-            on_exit=[rviz]
-        )
-    )
-
-    # MoveIt can start immediately (uses TF + RSP)
-    # No need to delay unless you want strict ordering
-
-
     return LaunchDescription(
         declared_arguments + [
-            rviz,
             static_tf,
-            rsp,
-            moveit,
-            # run_move_group_node,
+            rsp,           
             controller_manager,
             jsb_spawner,          
-            gripper_spawner,
-            arm_spawner,
+            start_arm,
+            start_gripper,
+            moveit,           # Start after gripper (uses same controller manager)
+            rviz,             # Start in parallel with moveit (just needs TF + RSP)
         ]
     )

@@ -17,3 +17,9 @@ coclon build --mixin release
 test it:
     sh -x a.sh
     ros2 launch moveit_task_constructor_demo run.launch.py exe:=pick_place_demo
+
+
+//////////////////////////
+sudo apt install ros-jazzy-moveit-task-constructor-core
+sudo apt install ros-jazzy-moveit-task-constructor-visualization
+sudo apt install ros-jazzy-moveit-task-constructor-capabilities

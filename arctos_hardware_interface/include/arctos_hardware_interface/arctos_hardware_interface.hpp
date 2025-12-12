@@ -19,6 +19,16 @@ namespace arctos_hardware_interface
 {
   using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
+  /**
+   * @class ArctosHardwareInterface
+   * @brief ROS2 hardware interface for Arctos arm via MKS CAN servo drivers
+   * 
+   * Manages communication with 6-DOF arm + 2-DOF gripper through CAN interface.
+   * Implements ros2_control SystemInterface for trajectory execution.
+   * 
+   * @note Requires CAN interface to be available at on_configure() time
+   * @note All joint parameters (CAN ID, gear ratio) must be defined in URDF
+   */
   class ArctosHardwareInterface : public hw::SystemInterface
   {
   public:
@@ -68,7 +78,7 @@ namespace arctos_hardware_interface
     std::string can_interface_;
 
     // Joint parameters from URDF
-    std::vector<int> can_ids_;
+    std::vector<u_int8_t> can_ids_;
     std::vector<double> gear_ratios_;
 
     // Joint state data

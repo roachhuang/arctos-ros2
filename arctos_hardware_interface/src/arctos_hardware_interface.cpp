@@ -5,29 +5,22 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/*
+unified indexing scheme applied to both your MksServoDriver and ArctosHardwareInterface, so CAN IDs and internal vectors can never get out of sync again
+Externally: always use CAN ID (1..N). Internally: always index vectors as idx = can_id_to_index(id).
+*/
 static const rclcpp::Logger LOGGER = rclcpp::get_logger("ArctosInterface");
 namespace arctos_hardware_interface
 {
 
     hardware_interface::CallbackReturn ArctosHardwareInterface::on_init(const hw::HardwareComponentInterfaceParams &params)
     {
-
         // can_driver_ = std::make_unique<ServoCanSimple>();
         if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
         {
             return hardware_interface::CallbackReturn::ERROR;
         }
 
-        initializeJointData();
-        // loadJointParameters();
-
-        RCLCPP_INFO(LOGGER,
-                    "Initialized with %zu joints", num_joints_);
-        return hardware_interface::CallbackReturn::SUCCESS;
-    }
-
-    void ArctosHardwareInterface::initializeJointData()
-    {
         num_joints_ = info_.joints.size();
         // This flag controls the logic in read()
         is_homing_.resize(num_joints_, false);
@@ -36,26 +29,24 @@ namespace arctos_hardware_interface
         position_commands_.resize(num_joints_, 0.0);
         position_states_.resize(num_joints_, 0.0);
         velocity_states_.resize(num_joints_, 0.0);
-    }
+        // loadJointParameters();
 
-    // void ArctosHardwareInterface::loadJointParameters()
-    // {
-    //     for (const auto &joint : info_.joints)
-    //     {
-    //         can_ids_.push_back(std::stoi(joint.parameters.at("can_id")));
-    //         gear_ratios_.push_back(std::stod(joint.parameters.at(param_prefix + "motor_id", "gear_ratio")));
-    //     }
-    // }
+        RCLCPP_INFO(LOGGER,
+                    "Initialized with %zu joints", num_joints_);
+        return hardware_interface::CallbackReturn::SUCCESS;
+    }
 
     CallbackReturn ArctosHardwareInterface::on_configure(const rclcpp_lifecycle::State &previous_state)
     {
         (void)previous_state;
-        RCLCPP_DEBUG(LOGGER, "Configuring hardware interface...");
+        RCLCPP_INFO(LOGGER, "Configuring hardware interface...");
 
         loadHardwareParameters();
 
-        if (!connectToCanInterface())
+        if (!can_driver_.connect(can_interface_))
         {
+            RCLCPP_FATAL(LOGGER,
+                         "Failed to open CAN interface: %s", can_interface_.c_str());
             return CallbackReturn::ERROR;
         }
 
@@ -64,6 +55,9 @@ namespace arctos_hardware_interface
 
     void ArctosHardwareInterface::loadHardwareParameters()
     {
+        can_ids_.clear();
+        gear_ratios_.clear();
+
         can_interface_ = info_.hardware_parameters.at("can_interface");
         vel_ = std::stod(info_.hardware_parameters.at("vel"));
         accel_ = std::stod(info_.hardware_parameters.at("accel"));
@@ -72,88 +66,121 @@ namespace arctos_hardware_interface
         // Collect joint names for service initialization
         // std::vector<std::string> joint_names;
         // joint_names.reserve(info_.joints.size());
-        // Process joints and their interfaces
+        // Process joints and their interface
+        can_ids_.reserve(info_.joints.size());
+        gear_ratios_.reserve(info_.joints.size());
         for (size_t i = 0; i < info_.joints.size(); i++)
         {
             can_ids_.push_back(std::stoi(info_.joints[i].parameters.at("can_id")));
             gear_ratios_.push_back(std::stod(info_.joints[i].parameters.at("gear_ratio")));
-            is_homing_[i] = false; // IMPORTANT: require homing on configure
         }
-    }
-
-    bool ArctosHardwareInterface::connectToCanInterface()
-    {
-        if (can_driver_.connect(can_interface_))
-        {
-            RCLCPP_DEBUG(LOGGER,
-                         "Connected to CAN interface: %s", can_interface_.c_str());
-            return true;
-        }
-
-        RCLCPP_FATAL(LOGGER,
-                     "Failed to connect to CAN interface: %s", can_interface_.c_str());
-        return false;
     }
 
     CallbackReturn ArctosHardwareInterface::on_activate(const rclcpp_lifecycle::State &previous_state)
     {
         (void)previous_state;
         RCLCPP_INFO(LOGGER, "Activating hardware and enabling motors...");
-        
-        for (size_t i = 0; i < num_joints_; i++)
+        // Enable all motors
+        for (u_int8_t can_id : can_ids_)
         {
-            if (!can_driver_.enableMotor(can_ids_[i], true))
+            if (!can_driver_.enableMotor(can_id, true))
             {
                 RCLCPP_ERROR(LOGGER,
-                             "Failed to enable motor for joint '%s' (CAN ID: %d)",
-                             info_.joints[i].name.c_str(), can_ids_[i]);
+                             "Failed to enable CAN ID: %d)", can_id);
                 return CallbackReturn::ERROR;
             }
-            RCLCPP_INFO(LOGGER, "Motor enabled for joint '%s'", info_.joints[i].name.c_str());
+            RCLCPP_INFO(LOGGER, "Motor enabled for CAN ID: %d", can_id);
         }
-        
+
+        // Read current positions from hardware
+        RCLCPP_INFO(LOGGER, "Reading initial positions from hardware...");
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        // Query all positions
+        for (u_int8_t can_id : can_ids_)
+        {
+            can_driver_.queryPosition(can_id);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+        // Get the position data
+        auto positions = can_driver_.getPositions();
+
+        if (positions.size() != num_joints_)
+        {
+            RCLCPP_WARN(LOGGER,
+                        "Expected %zu positions, got %zu. Some joints may not report position.",
+                        num_joints_, positions.size());
+        }
+
+        // ✅ Process positions into position_states_ and position_commands_
+        for (size_t i = 0; i < num_joints_; i++)
+        {
+            if (i < positions.size())
+            {
+                // Convert encoder counts to radians
+                double rad = countsToRadians(positions[i], gear_ratios_[i]);
+
+                // Normalize continuous joints (X, A, C) to [-π, π]
+                if (i == 0 || i == 3 || i == 5) // X_joint, A_joint, C_joint
+                {
+                    rad = std::fmod(rad + M_PI, 2.0 * M_PI) - M_PI; // Normalize
+                }
+
+                position_states_[i] = rad;
+                position_commands_[i] = rad; // Init commands to match current state
+
+                RCLCPP_INFO(LOGGER,
+                            "Joint '%s' current position: %.4f rad (%.1f deg)",
+                            info_.joints[i].name.c_str(), rad, rad * 180.0 / M_PI);
+            }
+            else
+            {
+                // Joint not reporting - initialize to zero
+                position_states_[i] = 0.0;
+                position_commands_[i] = 0.0;
+
+                RCLCPP_WARN(LOGGER,
+                            "Joint '%s' not reporting position - initializing to 0.0 rad",
+                            info_.joints[i].name.c_str());
+            }
+        }
+        // Homing disabled - robot starts from current position
+        // Uncomment below to enable automatic homing on startup
+        /*
+        can_ids_={1};
+        for (u_int8_t can_id : can_ids_)
+        {
+            can_driver_.home(can_id);
+        }
+        for (u_int8_t can_id : can_ids_)
+        {
+            int wait_homing_cnt = 0;
+            while (can_driver_.getHomingStatus(can_id) != 0x02)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                if (++wait_homing_cnt > 20)
+                {
+                    RCLCPP_ERROR(LOGGER, "Homing timeout for CAN ID: %d", can_id);
+                    return CallbackReturn::ERROR;
+                }
+            }
+            can_driver_.setZero(can_id);
+        }
+        */
+        RCLCPP_INFO(LOGGER, "Hardware activated. All joint positions synchronized with RViz.");
+
         return CallbackReturn::SUCCESS;
     }
-
-    // void ArctosHardwareInterface::readInitialPositions()
-    // {
-    //     // TODO: Read all joints when all motors are installed
-    //     const size_t active_joints = std::min(num_joints_, size_t(2));
-
-    //     for (size_t i = 0; i < active_joints; ++i)
-    //     {
-    //         auto position_counts = can_driver_.readAbsolutePosition(can_ids_[i]);
-    //         if (position_counts.has_value())
-    //         {
-    //             double pos = countsToRadians(position_counts.value(), gear_ratios_[i]);
-    //             pos = std::fmod(pos + M_PI, 2.0 * M_PI) - M_PI; // Normalize
-    //             position_states_[i] = pos;
-    //             position_commands_[i] = pos; // Initialize commands to current position
-    //         }
-    //         else
-    //         {
-    //             // Initialize to zero if CAN read fails
-    //             position_states_[i] = 0.0;
-    //             position_commands_[i] = 0.0;
-    //         }
-    //     }
-
-    //     // Initialize inactive joints
-    //     for (size_t i = active_joints; i < num_joints_; ++i)
-    //     {
-    //         position_states_[i] = 0.0;
-    //         position_commands_[i] = 0.0;
-    //     }
-    // }
 
     CallbackReturn ArctosHardwareInterface::on_deactivate(const rclcpp_lifecycle::State &previous_state)
     {
         (void)previous_state;
-        RCLCPP_DEBUG(LOGGER, "Deactivating hardware...");
-        for (auto can_id : can_ids_)
-        {
-            can_driver_.enableMotor(can_id, false);
-        }
+        RCLCPP_INFO(LOGGER, "Deactivating hardware...");
+        // for (auto can_id : can_ids_)
+        // {
+        //     can_driver_.enableMotor(can_id, false);
+        // }
         can_driver_.deactive();
         return CallbackReturn::SUCCESS;
     }
@@ -175,8 +202,8 @@ namespace arctos_hardware_interface
                 &velocity_states_[i]);
         }
 
-        RCLCPP_DEBUG(LOGGER,
-                     "Exported %zu state interfaces", state_interfaces.size());
+        RCLCPP_INFO(LOGGER,
+                    "Exported %zu state interfaces", state_interfaces.size());
         return state_interfaces;
     }
 
@@ -192,8 +219,8 @@ namespace arctos_hardware_interface
                 &position_commands_[i]);
         }
 
-        RCLCPP_DEBUG(LOGGER,
-                     "Exported %zu command interfaces", cmds.size());
+        RCLCPP_INFO(LOGGER,
+                    "Exported %zu command interfaces", cmds.size());
         return cmds;
     }
 
@@ -210,41 +237,23 @@ namespace arctos_hardware_interface
         // Use actual number of joints, not hardcoded 6
         for (size_t i = 0; i < num_joints_ && i < positions.size(); ++i)
         {
-            if (is_homing_[i])
+            // Also add bounds checking:
+            if (std::isnan(positions[i]) || std::isinf(positions[i]))
             {
-                // If homing, we EXPECT to hit the switch.
-                if (!can_driver_.getIN1State(can_ids_[i]))
-                {
-                    RCLCPP_INFO(LOGGER,
-                                "Joint '%s' homing complete. Switch triggered.", info_.joints[i].name.c_str());
-
-                    // Stop the homing flag
-                    is_homing_[i] = false;
-                    // Set the position to zero
-                    position_states_[i] = 0.0;
-                    can_driver_.setZero(can_ids_[i]);
-                }
+                RCLCPP_FATAL(LOGGER,
+                             "Joint '%s' returned NaN/Inf encoder value!", info_.joints[i].name.c_str());
+                return hardware_interface::return_type::ERROR;
             }
-            /*
-            else
-            {
-                // If NOT homing, hitting a limit switch (low active) is an EMERGENCY.
-                if (!can_driver_.getIN1State(can_ids_[i]) || !can_driver_.getIN2State(can_ids_[i]))
-                {
-                    RCLCPP_FATAL(LOGGER,
-                                 "HARDWARE LIMIT HIT on joint '%s' unexpectedly!", info_.joints[i].name.c_str());
 
-                    // This is a critical safety stop.
-                    can_driver_.EmergencyStop(can_ids_[i]);
-                    // Tell ros2_control to stop everything.
-
-                    return hardware_interface::return_type::ERROR;
-                }
-            }
-            */
             double prev = position_states_[i];
             double rad = countsToRadians(positions[i], gear_ratios_[i]);
-            rad = std::fmod(rad + M_PI, 2.0 * M_PI) - M_PI;
+
+            // Normalize continuous joints (X, A, C) to [-π, π]
+            if (i == 0 || i == 3 || i == 5)
+            {
+                rad = std::fmod(rad + M_PI, 2.0 * M_PI) - M_PI; // Normalize
+            }
+
             position_states_[i] = rad;
 
             // Calculate velocity with proper bounds checking
@@ -263,6 +272,7 @@ namespace arctos_hardware_interface
             position_states_[i] = 0.0;
             velocity_states_[i] = 0.0;
         }
+
         return hardware_interface::return_type::OK;
     }
 
@@ -283,13 +293,17 @@ namespace arctos_hardware_interface
         }
     }
 
-    hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &time, const rclcpp::Duration & /*period*/)
+    hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &time, const rclcpp::Duration &period)
     {
+        (void)time;
+        (void)period;
+
         static int write_count = 0;
-        if (write_count++ % 100 == 0) {
-            RCLCPP_INFO(LOGGER, "Write called %d times", write_count);
+        if (write_count++ % 100 == 0)
+        {
+            RCLCPP_DEBUG(LOGGER, "Write called %d times", write_count);
         }
-        
+
         for (size_t i = 0; i < num_joints_; ++i)
         {
             // Only send command if NOT homing (homing is a special "search" move)
@@ -297,13 +311,14 @@ namespace arctos_hardware_interface
             double cmd = position_commands_[i];
             if (std::fabs(cmd - position_states_[i]) > POSITION_CHANGE_THRESHOLD)
             {
-                RCLCPP_INFO(LOGGER,
+                RCLCPP_DEBUG(LOGGER,
                              "Sending command to joint '%s': %.3f rad (current: %.3f)",
                              info_.joints[i].name.c_str(), cmd, position_states_[i]);
                 int32_t target_pos = radiansToCounts(cmd, gear_ratios_[i]);
                 can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
             }
-            else{
+            else
+            {
                 RCLCPP_DEBUG(LOGGER,
                              "No significant command change for joint '%s'; skipping command.",
                              info_.joints[i].name.c_str());
