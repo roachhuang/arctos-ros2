@@ -17,7 +17,7 @@ include_directories(include)
 
 add_library(${PROJECT_NAME} SHARED
   src/arctos_hardware_interface.cpp
-  src/servo_can.cpp
+  src/mks_servo_driver.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -47,11 +47,12 @@ install(
 
 install(
   TARGETS ${PROJECT_NAME}
-  DESTINATION lib
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 install(
-  DIRECTORY include
-  # DESTINATION include/${PROJECT_NAME}
+  DIRECTORY include/
   DESTINATION include
 )
 

@@ -1,0 +1,46 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 10 # Hz
+    use_sim_time: false
+
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    gripper_controller:
+      type: parallel_gripper_action_controller/GripperActionController
+
+arm_controller:
+  ros__parameters:
+    joints:
+      - X_joint
+      - Y_joint
+      - Z_joint
+      - A_joint
+      - B_joint
+      - C_joint
+
+    command_interfaces:
+      - position
+
+    state_interfaces:
+      - position
+      # - velocity
+      # - effort
+
+    action_monitor_rate: 20.0
+
+    allow_partial_joints_goal: false
+    interpolate_from_desired_state: true
+    constraints:
+      stopped_velocity_tolerance: 0.01
+      goal_time: 0.0
+
+    # open_loop_control: true
+    # allow_integration_in_goal_trajectory: true
+
+gripper_controller:
+  ros__parameters:
+    joint: Left_jaw_joint

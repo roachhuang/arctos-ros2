@@ -42,7 +42,7 @@
 
       <!-- JOINT DEFINITIONS -->
       <xacro:arctos_joint name="X_joint" can_id="1" gear_ratio="13.5"/>
-      <xacro:arctos_joint name="Y_joint" can_id="2" gear_ratio="150.0"/>
+      <xacro:arctos_joint name="Y_joint" can_id="2" gear_ratio="-150.0"/>
       <xacro:arctos_joint name="Z_joint" can_id="3" gear_ratio="150.0"/>
       <xacro:arctos_joint name="A_joint" can_id="4" gear_ratio="48.0"/>
       <xacro:arctos_joint name="B_joint" can_id="5" gear_ratio="67.82"/>

@@ -145,9 +145,7 @@ namespace arctos_hardware_interface
                             info_.joints[i].name.c_str());
             }
         }
-        // Homing disabled - robot starts from current position
-        // Uncomment below to enable automatic homing on startup
-        /*
+        // Start homing procedure for all joints
         can_ids_={1};
         for (u_int8_t can_id : can_ids_)
         {
@@ -156,18 +154,18 @@ namespace arctos_hardware_interface
         for (u_int8_t can_id : can_ids_)
         {
             int wait_homing_cnt = 0;
-            while (can_driver_.getHomingStatus(can_id) != 0x02)
+            while (can_driver_.getHomingStatus(can_id) != 0x02) // Homing not complete
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 if (++wait_homing_cnt > 20)
                 {
-                    RCLCPP_ERROR(LOGGER, "Homing timeout for CAN ID: %d", can_id);
+                    RCLCPP_ERROR(LOGGER,
+                                 "Homing timeout for CAN ID: %d", can_id);
                     return CallbackReturn::ERROR;
                 }
             }
             can_driver_.setZero(can_id);
         }
-        */
         RCLCPP_INFO(LOGGER, "Hardware activated. All joint positions synchronized with RViz.");
 
         return CallbackReturn::SUCCESS;
@@ -298,11 +296,11 @@ namespace arctos_hardware_interface
         (void)time;
         (void)period;
 
-        static int write_count = 0;
-        if (write_count++ % 100 == 0)
-        {
-            RCLCPP_DEBUG(LOGGER, "Write called %d times", write_count);
-        }
+        // static int write_count = 0;
+        // if (write_count++ % 100 == 0)
+        // {
+        //     RCLCPP_DEBUG(LOGGER, "Write called %d times", write_count);
+        // }
 
         for (size_t i = 0; i < num_joints_; ++i)
         {

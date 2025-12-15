@@ -159,7 +159,7 @@ mtc::Task MTCTaskNode::createTask()
       stage->properties().set("marker_ns", "approach_object");
       stage->properties().set("link", hand_frame);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-      stage->setMinMaxDistance(0.01, 0.15);
+      stage->setMinMaxDistance(0.0, 0.15);
 
       geometry_msgs::msg::Vector3Stamped vec;
       vec.header.frame_id = hand_frame;

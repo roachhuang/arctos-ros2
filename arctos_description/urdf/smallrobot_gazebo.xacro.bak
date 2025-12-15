@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="arctos" params="number">
+    
+    <xacro:macro name='arctos_gazebo'>
+
+    <xacro:macro name="default_transmission" params="idx joint_name reduction_ratio">
+        <transmission name="transmission_${idx}">
+        <type>transmission_interface/SimpleTransmission</type>
+        <actuator name="motor_${idx}">
+            <mechanicalReduction>${reduction_ratio}</mechanicalReduction>
+        </actuator>
+        <joint name="${joint_name}">
+            <hardwareInterface>hardware_interface/position</hardwareInterface>
+            <hardwareInterface>hardware_interface/velocity</hardwareInterface> 
+            <!-- <hardwareInterface>hardware_interface/effort</hardwareInterface> -->
+        </joint>
+        </transmission>
+    </xacro:macro>
+
+    <gazebo reference="base_link">
+        <material>Gazebo/White</material>
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>0</self_collide>
+    </gazebo>
+    <gazebo reference="link1">
+        <material>Gazebo/Orange</material>
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>0</self_collide>
+    </gazebo>
+     <gazebo reference="link2">
+        <material>Gazebo/Orange</material>
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>0</self_collide>
+    </gazebo>
+     <gazebo reference="link3">
+        <material>Gazebo/Orange</material>
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>0</self_collide>
+    </gazebo>
+     <gazebo reference="link4">
+        <material>Gazebo/Orange</material>
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>0</self_collide>
+    </gazebo>
+    <gazebo reference="link5">
+        <material>Gazebo/White</material>
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>0</self_collide>
+    </gazebo>
+    <gazebo reference="link6">
+        <material>Gazebo/Orange</material>
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>0</self_collide>
+    </gazebo>
+    <gazebo reference="gripper_left_link">
+        <material>Gazebo/Grey</material>
+    </gazebo>
+     <gazebo reference="gripper_right_link">
+        <material>Gazebo/Grey</material>        
+    </gazebo>
+    <gazebo reference='end_effector_link'>
+        <material>Gazebo/Black</material>
+    </gazebo>
+
+    <xacro:default_transmission idx='1' joint_name='joint1' reduction_ratio='4.8' />
+    <xacro:default_transmission idx='2' joint_name='joint2' reduction_ratio='4.0' />
+    <xacro:default_transmission idx='3' joint_name='joint3' reduction_ratio='5.0' />
+    <xacro:default_transmission idx='4' joint_name='joint4' reduction_ratio='2.8' />
+    <xacro:default_transmission idx='5' joint_name='joint5' reduction_ratio='2.1' />
+    <xacro:default_transmission idx='6' joint_name='joint6' reduction_ratio='1.0' />
+
+    <xacro:default_transmission idx='7' joint_name='gripper_left_joint' reduction_ratio='1.0' />
+    <xacro:default_transmission idx='8' joint_name='gripper_right_joint' reduction_ratio='1.0' />
+    
+    <!-- <ros2_control name="GazeboSimSystem" type="system">
+        <hardware>
+            <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+        </hardware>
+    </ros2_control> -->
+
+    <gazebo>
+        <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+            <parameters>$(find robotarm_controller)/config/sim_controllers.yaml</parameters>
+        </plugin>
+    </gazebo>
+
+
+    </xacro:macro>
+
+</robot>

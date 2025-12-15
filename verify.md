@@ -110,3 +110,6 @@ ros2 control list_hardware_components
 
 ros2 topic echo /joint_states
 ros2 topic list | grep arm_controller
+
+ros2 launch arctos_bringup ros2_control.launch.py \
+  --ros-args --log-level arctos_hardware_interface:=debug

@@ -1,0 +1,9 @@
+<library path="robotarm_controller">
+    <class name="robotarm_controller/RobotArmInterface"
+        type="robotarm_controller::RobotArmInterface"
+        base_class_type="hardware_interface::SystemInterface">
+        <description>
+            Robot arm hardware interface for 6-DOF manipulator with serial communication.
+        </description>
+    </class> 
+</library>

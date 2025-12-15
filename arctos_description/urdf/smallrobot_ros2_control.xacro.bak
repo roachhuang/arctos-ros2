@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="arctos">
+  <!-- arctos_hw is the hw component name -->
+  <ros2_control name="arctos_hw" type="system">
+    <!-- ros2_control gazebo simulator-->
+    <xacro:if value="$(arg is_sim)">
+       <hardware>
+          <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+        </hardware>    
+    </xacro:if>
+    <!-- ros2_control real robot hw interface-->
+    <xacro:unless value="$(arg is_sim)">
+      <hardware>
+        <plugin>arctos_controller/RobotArmInterface</plugin>
+        <param name='port'>/dev/ttyUSB0</param>
+      </hardware>
+    </xacro:unless>
+
+    <joint name="joint1">
+      <command_interface name="position">
+        <param name='min'>-1.98</param>
+        <param name='max'>1.98</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint2">
+      <command_interface name="position">
+        <param name='min'>-1.41</param>
+        <param name='max'>1.34</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint3">
+      <command_interface name="position">
+        <param name='min'>-${PI}</param>
+        <param name='max'>1.22</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint4">
+      <command_interface name="position">
+        <param name='min'>-${PI}</param>
+        <param name='max'>${PI}</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint5">
+      <command_interface name="position">
+        <param name='min'>-2.42</param>
+        <param name='max'>2.42</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint6">
+      <command_interface name="position">
+        <param name='min'>-${PI}</param>
+        <param name='max'>${PI}</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="gripper_left_joint">
+      <command_interface name="position">
+        <param name='min'>-0.01</param>
+        <param name='max'>0.019</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="gripper_right_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+</robot>

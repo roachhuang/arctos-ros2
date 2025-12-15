@@ -1,11 +1,10 @@
-#ifndef ARCTOS_HARDWARE_INTERFACE_HPP
-#define ARCTOS_HARDWARE_INTERFACE_HPP
+#pragma once
 
 #include <hardware_interface/system_interface.hpp>
 #include <hardware_interface/types/hardware_interface_return_values.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/state.hpp>
-#include "arctos_hardware_interface/servo_can.hpp"
+#include "arctos_hardware_interface/mks_servo_driver.hpp"
 
 #include <vector>
 #include <memory>
@@ -119,4 +118,3 @@ namespace arctos_hardware_interface
 
 } // namespace arctos_hardware_interface
 
-#endif // ARCTOS_HARDWARE_INTERFACE_HPP

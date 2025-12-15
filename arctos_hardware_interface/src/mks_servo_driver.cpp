@@ -4,7 +4,7 @@
  * @author Arctos Team
  */
 
-#include "arctos_hardware_interface/servo_can.hpp"
+#include "arctos_hardware_interface/mks_servo_driver.hpp"
 // #include <cmath>
 #include <algorithm>
 
