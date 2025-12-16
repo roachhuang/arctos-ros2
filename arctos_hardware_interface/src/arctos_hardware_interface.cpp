@@ -146,26 +146,26 @@ namespace arctos_hardware_interface
             }
         }
         // Start homing procedure for all joints
-        can_ids_={1};
-        for (u_int8_t can_id : can_ids_)
-        {
-            can_driver_.home(can_id);
-        }
-        for (u_int8_t can_id : can_ids_)
-        {
-            int wait_homing_cnt = 0;
-            while (can_driver_.getHomingStatus(can_id) != 0x02) // Homing not complete
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                if (++wait_homing_cnt > 20)
-                {
-                    RCLCPP_ERROR(LOGGER,
-                                 "Homing timeout for CAN ID: %d", can_id);
-                    return CallbackReturn::ERROR;
-                }
-            }
-            can_driver_.setZero(can_id);
-        }
+        // can_ids_={1};
+        // for (u_int8_t can_id : can_ids_)
+        // {
+        //     can_driver_.home(can_id);
+        // }
+        // for (u_int8_t can_id : can_ids_)
+        // {
+        //     int wait_homing_cnt = 0;
+        //     while (can_driver_.getHomingStatus(can_id) != 0x02) // Homing not complete
+        //     {
+        //         std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        //         if (++wait_homing_cnt > 20)
+        //         {
+        //             RCLCPP_ERROR(LOGGER,
+        //                          "Homing timeout for CAN ID: %d", can_id);
+        //             return CallbackReturn::ERROR;
+        //         }
+        //     }
+        //     can_driver_.setZero(can_id);
+        // }
         RCLCPP_INFO(LOGGER, "Hardware activated. All joint positions synchronized with RViz.");
 
         return CallbackReturn::SUCCESS;

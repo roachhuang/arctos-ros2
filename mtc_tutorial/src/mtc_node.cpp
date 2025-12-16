@@ -1,4 +1,4 @@
-#include "mtc_tutorial/mtc_node.hpp"  // Include your own header first
+#include "mtc_tutorial/mtc_node.hpp" // Include your own header first
 #include <moveit/planning_scene/planning_scene.hpp>
 #include <moveit/planning_scene_interface/planning_scene_interface.hpp>
 #include <moveit/task_constructor/solvers.h>
@@ -103,8 +103,8 @@ mtc::Task MTCTaskNode::createTask()
   auto sampling_planner = std::make_shared<mtc::solvers::PipelinePlanner>(node_);
   auto interpolation_planner = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
   auto cartesian_planner = std::make_shared<mtc::solvers::CartesianPath>();
-  cartesian_planner->setMaxVelocityScalingFactor(1.0);
-  cartesian_planner->setMaxAccelerationScalingFactor(1.0);
+  cartesian_planner->setMaxVelocityScalingFactor(0.2); // slower
+  cartesian_planner->setMaxAccelerationScalingFactor(0.2);
   cartesian_planner->setStepSize(0.01);
   cartesian_planner->setMinFraction(0.0);
 
@@ -177,8 +177,9 @@ mtc::Task MTCTaskNode::createTask()
       stage->setObject("object");
 
       // Adaptive angle sampling based on object and gripper geometry
-      double angle_delta = 2.0 * std::atan2(GRIPPER_WIDTH, OBJECT_RADIUS);
-      stage->setAngleDelta(std::min(angle_delta, MIN_ANGLE_DELTA));
+      // double angle_delta = 2.0 * std::atan2(GRIPPER_WIDTH, OBJECT_RADIUS);
+      // stage->setAngleDelta(std::min(angle_delta, MIN_ANGLE_DELTA));
+      stage->setAngleDelta(MIN_ANGLE_DELTA);
       stage->setMonitoredStage(current_state_ptr);
 
       // Grasp frame transform: rotate to point downward
@@ -332,7 +333,7 @@ mtc::Task MTCTaskNode::createTask()
       stage->properties().set("link", hand_frame);
 
       geometry_msgs::msg::Vector3Stamped vec;
-      vec.header.frame_id = hand_frame;  // Use world frame for consistent retreat
+      vec.header.frame_id = hand_frame; // Use world frame for consistent retreat
       vec.vector.y = 1;
       stage->setDirection(vec);
       place->insert(std::move(stage));

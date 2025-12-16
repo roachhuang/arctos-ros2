@@ -9,7 +9,7 @@ namespace mtc = moveit::task_constructor;
 /**
  * @class MTCTaskNode
  * @brief Implements pick-and-place task using Motion Task Constructor
- * 
+ *
  * Manages object pickup, transport, and placement for Arctos manipulator.
  */
 class MTCTaskNode
@@ -29,12 +29,12 @@ public:
 
   /**
    * @brief Execute pick-and-place task
-   * 
+   *
    * Plans and executes the full manipulation task:
    * 1. Move to pickup location
    * 2. Grasp object with orientation sampling
    * 3. Lift object
-   * 4. Move to place location  
+   * 4. Move to place location
    * 5. Release object and retreat
    * 6. Return to home
    */
@@ -42,17 +42,17 @@ public:
 
   /**
    * @brief Setup planning scene with collision objects
-   * 
+   *
    * Adds cylinder object at pickup location for collision checking.
    */
   void setupPlanningScene();
 
   // =========== ROBOT GEOMETRY CONSTANTS ===========
   /// Object to be manipulated: cylinder radius (meters)
-  static constexpr double OBJECT_RADIUS = 0.01;  // 1 cm radius
+  static constexpr double OBJECT_RADIUS = 0.01; // 1 cm radius
 
   /// Gripper maximum jaw opening (meters)
-  static constexpr double GRIPPER_WIDTH = 0.03;  // 3 cm max
+  static constexpr double GRIPPER_WIDTH = 0.03; // 3 cm max
 
   /// Distance from Gripper_1 frame to jaw center (meters)
   static constexpr double GRIPPER_JAW_OFFSET_Y = -0.06;
@@ -71,11 +71,11 @@ public:
   static constexpr double PICKUP_Y = -0.36;
 
   /// Minimum grasp sampling angle delta (radians)
-  static constexpr double MIN_ANGLE_DELTA = M_PI / 36;  // 5°
+  static constexpr double MIN_ANGLE_DELTA = M_PI / 36; // 5°
 
   // =========== PLACE PARAMETERS ===========
   /// X position of place location relative to object frame (meters)
-  static constexpr double PLACE_OFFSET_X = -0.65;
+  static constexpr double PLACE_OFFSET_X = -0.65; // or 0
 
   /// Y position of place location relative to object frame (meters)
   static constexpr double PLACE_OFFSET_Y = -0.13;
@@ -91,4 +91,4 @@ private:
   rclcpp::Node::SharedPtr node_;
 };
 
-#endif  // MTC_TUTORIAL_MTC_NODE_HPP
+#endif // MTC_TUTORIAL_MTC_NODE_HPP
