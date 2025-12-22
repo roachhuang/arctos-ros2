@@ -10,9 +10,9 @@ unified indexing scheme applied to both your MksServoDriver and ArctosHardwareIn
 Externally: always use CAN ID (1..N). Internally: always index vectors as idx = can_id_to_index(id).
 */
 static const rclcpp::Logger LOGGER = rclcpp::get_logger("ArctosInterface");
+
 namespace arctos_hardware_interface
 {
-
     hardware_interface::CallbackReturn ArctosHardwareInterface::on_init(const hw::HardwareComponentInterfaceParams &params)
     {
         // can_driver_ = std::make_unique<ServoCanSimple>();
@@ -139,7 +139,7 @@ namespace arctos_hardware_interface
                 // Joint not reporting - initialize to zero
                 position_states_[i] = 0.0;
                 position_commands_[i] = 0.0;
-
+                velocity_states_[i] = 0.0; // <-- ADD THIS LINE
                 RCLCPP_WARN(LOGGER,
                             "Joint '%s' not reporting position - initializing to 0.0 rad",
                             info_.joints[i].name.c_str());
@@ -199,7 +199,10 @@ namespace arctos_hardware_interface
                 hw::HW_IF_VELOCITY,
                 &velocity_states_[i]);
         }
-
+        // state_interfaces.emplace_back(
+        //     "Right_jaw_joint",
+        //     hw::HW_IF_POSITION,
+        //     &gripper_state_);
         RCLCPP_INFO(LOGGER,
                     "Exported %zu state interfaces", state_interfaces.size());
         return state_interfaces;
@@ -216,6 +219,10 @@ namespace arctos_hardware_interface
                 hw::HW_IF_POSITION,
                 &position_commands_[i]);
         }
+        // cmds.emplace_back(
+        //    "Right_jaw_joint",
+        //     hw::HW_IF_POSITION,
+        //     &gripper_cmd_);
 
         RCLCPP_INFO(LOGGER,
                     "Exported %zu command interfaces", cmds.size());
@@ -224,27 +231,24 @@ namespace arctos_hardware_interface
 
     hw::return_type ArctosHardwareInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration &period)
     {
-        //     position_states_ = position_commands_;
-        //     return hardware_interface::return_type::OK;
+        // position_states_ = position_commands_;
+        // gripper_state_ = gripper_cmd_;
+        // return hardware_interface::return_type::OK;
 
         double dt = period.seconds();
-        auto positions = can_driver_.getPositions();
+        // auto positions = can_driver_.getPositions();
         // RCLCPP_INFO(LOGGER,
         //             "Exported %zu postions", positions.size());
 
         // Use actual number of joints, not hardcoded 6
-        for (size_t i = 0; i < num_joints_ && i < positions.size(); ++i)
+        for (size_t i = 0; i < num_joints_; ++i)
         {
-            // Also add bounds checking:
-            if (std::isnan(positions[i]) || std::isinf(positions[i]))
-            {
-                RCLCPP_FATAL(LOGGER,
-                             "Joint '%s' returned NaN/Inf encoder value!", info_.joints[i].name.c_str());
-                return hardware_interface::return_type::ERROR;
-            }
-
             double prev = position_states_[i];
-            double rad = countsToRadians(positions[i], gear_ratios_[i]);
+
+            u_int16_t can_id = can_ids_[i];
+            int64_t pos_counts = can_driver_.getPosition(can_id);
+
+            double rad = countsToRadians(pos_counts, gear_ratios_[i]);
 
             // Normalize continuous joints (X, A, C) to [-π, π]
             if (i == 0 || i == 3 || i == 5)
@@ -255,20 +259,7 @@ namespace arctos_hardware_interface
             position_states_[i] = rad;
 
             // Calculate velocity with proper bounds checking
-            if (dt > VELOCITY_EPSILON)
-            {
-                velocity_states_[i] = (rad - prev) / dt;
-            }
-            else
-            {
-                velocity_states_[i] = 0.0;
-            }
-        }
-        // initialize inactive joints
-        for (size_t i = positions.size(); i < num_joints_; ++i)
-        {
-            position_states_[i] = 0.0;
-            velocity_states_[i] = 0.0;
+            updateJointVelocity(i, prev, dt);
         }
 
         return hardware_interface::return_type::OK;
@@ -326,17 +317,17 @@ namespace arctos_hardware_interface
         return hardware_interface::return_type::OK;
     }
 
-    bool ArctosHardwareInterface::hasCommandsChanged() const
-    {
-        for (size_t i = 0; i < position_commands_.size(); ++i)
-        {
-            if (std::fabs(position_commands_[i] - position_states_[i]) > POSITION_CHANGE_THRESHOLD)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    // bool ArctosHardwareInterface::hasCommandsChanged() const
+    // {
+    //     for (size_t i = 0; i < position_commands_.size(); ++i)
+    //     {
+    //         if (std::fabs(position_commands_[i] - position_states_[i]) > POSITION_CHANGE_THRESHOLD)
+    //         {
+    //             return true;
+    //         }
+    //     }
+    //     return false;
+    // }
 
 } // namespace arctos_hardware_interface
 

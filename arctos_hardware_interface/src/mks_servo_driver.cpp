@@ -299,14 +299,14 @@ namespace mks_servo_driver
                     queryPosition(id);
                 }
             }
-            // Query IO status every 50ms (every 10th cycle)
-            if (query_counter % 10 == 0)
-            {
-                for (int id = 1; id <= 6; ++id)
-                {
-                    queryIO(id);
-                }
-            }
+            // Query IO status every 50ms (every 10th cycle) q
+            // if (query_counter % 10 == 0)
+            // {
+            //     for (int id = 1; id <= 6; ++id)
+            //     {
+            //         queryIO(id);
+            //     }
+            // }
             query_counter++;
 
             std::vector<can_frame> frames;

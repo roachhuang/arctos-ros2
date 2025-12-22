@@ -121,7 +121,6 @@ def generate_launch_description():
         parameters=[
             robot_description,
             ros2_controller_yaml,
-            # {"use_fake_hardware": use_fake_hardware},
         ],
         output="screen",
         on_exit=Shutdown(),

@@ -57,7 +57,7 @@ namespace arctos_hardware_interface
     hw::return_type read(const rclcpp::Time &time, const rclcpp::Duration &period) override;
     hw::return_type write(const rclcpp::Time &time, const rclcpp::Duration &period) override;
 
-    // Lifecycle overrides
+    // Lifecycle nodes overrides
     CallbackReturn on_configure(const rclcpp_lifecycle::State &previous_state) override;
     CallbackReturn on_activate(const rclcpp_lifecycle::State &previous_state) override;
     CallbackReturn on_deactivate(const rclcpp_lifecycle::State &previous_state) override;
@@ -67,7 +67,7 @@ namespace arctos_hardware_interface
 
   private:
     // Core components
-    // std::unique_ptr<ServoCanSimple> can_driver_;
+    // std::shared_ptr<ServoCanSimple> can_driver_;
     mks_servo_driver::MksServoDriver can_driver_;
 
     // Configuration
@@ -81,9 +81,13 @@ namespace arctos_hardware_interface
     std::vector<double> gear_ratios_;
 
     // Joint state data
+    static constexpr size_t DOF = 6;
     std::vector<double> position_states_;
     std::vector<double> velocity_states_;
     std::vector<double> position_commands_;
+    double gripper_cmd_ = 0.0;
+    double gripper_state_ = 0.0;
+
     // std::vector<double> prev_position_commands_;
     std::vector<bool> is_homing_;
     // IN_1 (home lmt)
@@ -112,7 +116,7 @@ namespace arctos_hardware_interface
 
     bool readJointPosition(size_t joint_index);
     void updateJointVelocity(size_t joint_index, double prev_position, double dt);
-    bool hasCommandsChanged() const;
+    // bool hasCommandsChanged() const;
     void sendPositionCommands();
   };
 
