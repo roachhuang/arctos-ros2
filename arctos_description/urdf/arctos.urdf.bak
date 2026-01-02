@@ -35,90 +35,6 @@
   <material name="white">
     <color rgba="1.0 1.0 1.0 1.0"/>
   </material>
-  <!-- <xacro:include filename="$(find arctos_description)/urdf/joint_link.xacro" /> -->
-  <link name="Gripper_1">
-    <visual>
-      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
-      <geometry>
-        <mesh filename="package://arctos_description/meshes/Gripper_1.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-      <material name="white"/>
-    </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
-      <geometry>
-        <mesh filename="package://arctos_description/meshes/Gripper_1.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
-    <inertial>
-      <origin rpy="0 0 0" xyz="-0.001 -0.0211 0.0"/>
-      <mass value="0.2"/>
-      <inertia ixx="0.0001" ixy="-0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
-    </inertial>
-  </link>
-  <link name="Left_jaw_1">
-    <visual>
-      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
-      <geometry>
-        <mesh filename="package://arctos_description/meshes/Left_jaw_1.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-      <material name="white"/>
-    </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
-      <geometry>
-        <mesh filename="package://arctos_description/meshes/Left_jaw_1.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
-    <inertial>
-      <origin rpy="0 0 0" xyz="-0.0 -0.0211 0.0"/>
-      <mass value="0.001"/>
-      <inertia ixx="1.4e-08" ixy="0.0" ixz="0.0" iyy="4.2e-08" iyz="0.0" izz="3.5e-08"/>
-    </inertial>
-  </link>
-  <link name="Right_jaw_1">
-    <visual>
-      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
-      <geometry>
-        <mesh filename="package://arctos_description/meshes/Right_jaw_1.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-      <material name="white"/>
-    </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
-      <geometry>
-        <mesh filename="package://arctos_description/meshes/Right_jaw_1.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
-    <inertial>
-      <origin rpy="0 0 0" xyz="-0.001 -0.0211 0.0"/>
-      <mass value="0.001"/>
-      <inertia ixx="1.4e-08" ixy="0.0" ixz="0.0" iyy="4.2e-08" iyz="0.0" izz="3.5e-08"/>
-    </inertial>
-  </link>
-  <!-- Fixed gripper joint, no axis needed -->
-  <!-- <xacro:arctos_joint
-    name="Gripper_joint" type="fixed"
-    parent="Link_6_1" child="Gripper_1"
-    origin_xyz="0.0 -0.0 0.0" origin_rpy="0 0 0"
-    limit_u="0.0" limit_l="0.0" limit_e="0.0" limit_v="0.0"
-  /> -->
-  <!-- Left jaw joint, prismatic with axis directly defined -->
-  <joint name="Right_jaw_joint" type="prismatic">
-    <parent link="Gripper_1"/>
-    <child link="Right_jaw_1"/>
-    <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
-    <axis xyz="0 0 1"/>
-    <limit effort="1.0" lower="0.0" upper="0.015" velocity="10.0"/>
-  </joint>
-  <joint name="Left_jaw_joint" type="prismatic">
-    <parent link="Gripper_1"/>
-    <child link="Left_jaw_1"/>
-    <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
-    <axis xyz="0 0 1"/>
-    <mimic joint="Right_jaw_joint" multiplier="-1" offset="0.0"/>
-    <limit effort="1.0" lower="-0.015" upper="0.0" velocity="10.0"/>
-  </joint>
   <!-- Define all links -->
   <link name="world"/>
   <link name="tool_link"/>
@@ -128,7 +44,7 @@
       <geometry>
         <mesh filename="package://arctos_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
       </geometry>
-      <material name="white"/>
+      <material name="green"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
@@ -263,11 +179,10 @@
     </inertial>
   </link>
   <!-- Define all joints -->
-  <joint name="base_joint" type="fixed">
+  <joint name="world_joint" type="fixed">
     <parent link="world"/>
     <child link="base_link"/>
     <origin rpy="0 0 0" xyz="0 0 0"/>
-    <axis xyz="0 0 1"/>
   </joint>
   <joint name="X_joint" type="revolute">
     <parent link="base_link"/>
@@ -315,21 +230,97 @@
     <parent link="Link_6_1"/>
     <child link="tool_link"/>
     <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+    <axis xyz="-0.0 1.0 -0.0"/>
   </joint>
   <!-- Activate Gazebo plugin -->
   <!-- <xacro:arctos_gazebo /> -->
-  <!--- from moveit config package  -->
-  <!-- <xacro:include filename="$(find arctos_description)/urdf/arctos.ros2_control.xacro" /> -->
-  <!-- connection btw gripper and arm. Fixed gripper joint, no axis needed -->
-  <joint name="gripper_base_joint" type="fixed">
-    <parent link="tool_link"/>
-    <child link="Gripper_1"/>
+  <!-- <xacro:include filename="$(find arctos_description)/urdf/joint_link.xacro" /> -->
+  <link name="Gripper_1">
+    <visual>
+      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
+      <geometry>
+        <mesh filename="package://arctos_description/meshes/Gripper_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
+      <geometry>
+        <mesh filename="package://arctos_description/meshes/Gripper_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.001 -0.0211 0.0"/>
+      <mass value="0.2"/>
+      <inertia ixx="0.0001" ixy="-0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <link name="Left_jaw_1">
+    <visual>
+      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
+      <geometry>
+        <mesh filename="package://arctos_description/meshes/Left_jaw_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
+      <geometry>
+        <mesh filename="package://arctos_description/meshes/Left_jaw_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0 -0.0211 0.0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1.4e-08" ixy="0.0" ixz="0.0" iyy="4.2e-08" iyz="0.0" izz="3.5e-08"/>
+    </inertial>
+  </link>
+  <link name="Right_jaw_1">
+    <visual>
+      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
+      <geometry>
+        <mesh filename="package://arctos_description/meshes/Right_jaw_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0.0 0.323 -0.5685"/>
+      <geometry>
+        <mesh filename="package://arctos_description/meshes/Right_jaw_1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.001 -0.0211 0.0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1.4e-08" ixy="0.0" ixz="0.0" iyy="4.2e-08" iyz="0.0" izz="3.5e-08"/>
+    </inertial>
+  </link>
+  <!-- Fixed gripper joint, no axis needed -->
+  <!-- <xacro:arctos_joint
+    name="Gripper_joint" type="fixed"
+    parent="Link_6_1" child="Gripper_1"
+    origin_xyz="0.0 -0.0 0.0" origin_rpy="0 0 0"
+    limit_u="0.0" limit_l="0.0" limit_e="0.0" limit_v="0.0"
+  /> -->
+  <joint name="Right_jaw_joint" type="prismatic">
+    <parent link="Gripper_1"/>
+    <child link="Right_jaw_1"/>
     <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="1.0" lower="0.0" upper="0.015" velocity="10.0"/>
+  </joint>
+  <joint name="Left_jaw_joint" type="prismatic">
+    <parent link="Gripper_1"/>
+    <child link="Left_jaw_1"/>
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+    <axis xyz="0 0 1"/>
+    <mimic joint="Right_jaw_joint" multiplier="-1" offset="0.0"/>
+    <limit acceleration="5.0" effort="1.0" lower="-0.015" upper="0.0" velocity="10.0"/>
   </joint>
   <ros2_control name="arm" type="system">
     <hardware>
-      <plugin>arctos_hardware_interface/ArctosHardwareInterface</plugin>
-      <class_type>arctos_hardware_interface::ArctosHardwareInterface</class_type>
+      <plugin>mock_components/GenericSystem</plugin>
+      <!-- <plugin>arctos_hardware_interface/ArctosHardwareInterface</plugin> -->
       <param name="can_interface">can0</param>
       <param name="accel">10</param>
       <param name="vel">100</param>
@@ -344,10 +335,13 @@
       <state_interface name="velocity">
         <param name="initial_value">0.0</param>
       </state_interface>
+      <!-- <state_interface name="effort">
+        <param name="initial_value">0.0</param>
+      </state_interface> -->
     </joint>
     <joint name="Y_joint">
       <param name="can_id">2</param>
-      <param name="gear_ratio">-150.0</param>
+      <param name="gear_ratio">150.0</param>
       <command_interface name="position"/>
       <state_interface name="position">
         <param name="initial_value">0.0</param>
@@ -355,6 +349,9 @@
       <state_interface name="velocity">
         <param name="initial_value">0.0</param>
       </state_interface>
+      <!-- <state_interface name="effort">
+        <param name="initial_value">0.0</param>
+      </state_interface> -->
     </joint>
     <joint name="Z_joint">
       <param name="can_id">3</param>
@@ -366,6 +363,9 @@
       <state_interface name="velocity">
         <param name="initial_value">0.0</param>
       </state_interface>
+      <!-- <state_interface name="effort">
+        <param name="initial_value">0.0</param>
+      </state_interface> -->
     </joint>
     <joint name="A_joint">
       <param name="can_id">4</param>
@@ -377,6 +377,9 @@
       <state_interface name="velocity">
         <param name="initial_value">0.0</param>
       </state_interface>
+      <!-- <state_interface name="effort">
+        <param name="initial_value">0.0</param>
+      </state_interface> -->
     </joint>
     <joint name="B_joint">
       <param name="can_id">5</param>
@@ -388,6 +391,9 @@
       <state_interface name="velocity">
         <param name="initial_value">0.0</param>
       </state_interface>
+      <!-- <state_interface name="effort">
+        <param name="initial_value">0.0</param>
+      </state_interface> -->
     </joint>
     <joint name="C_joint">
       <param name="can_id">6</param>
@@ -399,37 +405,30 @@
       <state_interface name="velocity">
         <param name="initial_value">0.0</param>
       </state_interface>
+      <!-- <state_interface name="effort">
+        <param name="initial_value">0.0</param>
+      </state_interface> -->
     </joint>
+  </ros2_control>
+  <ros2_control name="gripper" type="system">
+    <hardware>
+      <plugin>mock_components/GenericSystem</plugin>
+    </hardware>
     <joint name="Right_jaw_joint">
-      <param name="can_id">7</param>
-      <param name="gear_ratio">1</param>
       <command_interface name="position"/>
       <state_interface name="position">
         <param name="initial_value">0.0</param>
       </state_interface>
-      <state_interface name="velocity">
-        <param name="initial_value">0.0</param>
-      </state_interface>
     </joint>
-    <!-- </ros2_control>
-
-    <ros2_control name="gripper" type="system">
-      <hardware>
-        <plugin>mock_components/GenericSystem</plugin>
-      </hardware> -->
-    <!-- <joint name="Right_jaw_joint">
-        <command_interface name="position"/>
-        <state_interface name="position">
-          <param name="initial_value">0.0</param>
-        </state_interface>
-        <state_interface name="velocity">
-          <param name="initial_value">0.0</param>
-        </state_interface>    
-        <state_interface name="effort">
-          <param name="initial_value">0.0</param>
-        </state_interface>
-      </joint> -->
   </ros2_control>
+  <!--- from moveit config package  -->
+  <!-- <xacro:include filename="$(find arctos_description)/urdf/arctos.ros2_control.xacro" /> -->
+  <!-- connection btw gripper and arm. Fixed gripper joint, no axis needed -->
+  <joint name="gripper_base_joint" type="fixed">
+    <parent link="tool_link"/>
+    <child link="Gripper_1"/>
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+  </joint>
   <!-- ros2_control with mock components is included directly from arctos.ros2_control.xacro -->
   <!-- include gazebo parameters -->
   <!-- <xacro:include filename="$(find arctos_description)/urdf/smallrobot_gazebo.xacro" /> -->
