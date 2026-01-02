@@ -91,14 +91,16 @@ namespace mks_servo_driver
 
     bool MksServoDriver::sendCmd(uint16_t id, uint8_t code, const std::vector<uint8_t> &params)
     {
-        if (sock_ < 0)
-            return false;
+        if (sock_ < 0){
+           RCLCPP_ERROR(LOGGER, "Socket not connected!");
+           return false;
+        }
         std::vector<uint8_t> data{code};
         data.insert(data.end(), params.begin(), params.end());
         data.push_back(calcCrc(id, data));
         if (data.size() > 8)
         {
-            RCLCPP_ERROR(LOGGER, "invalid cmd size: %ld", data.size());
+            RCLCPP_ERROR(LOGGER, "invalid cmd size!: %ld", data.size());
             return false;
         }
 

@@ -21,14 +21,17 @@ namespace arctos_hardware_interface
             return hardware_interface::CallbackReturn::ERROR;
         }
 
-        num_joints_ = info_.joints.size();
+        // Use actual joint count from URDF/robot description instead of hardcoded value
+        // num_joints_ = info_.joints.size();
+        num_joints_ = DOF;
         // This flag controls the logic in read()
         is_homing_.resize(num_joints_, false);
         // in1_.resize(num_joints_, false);
         // in2_.resize(num_joints_, false);
-        position_commands_.resize(num_joints_, 0.0);
-        position_states_.resize(num_joints_, 0.0);
-        velocity_states_.resize(num_joints_, 0.0);
+        position_commands_.assign(num_joints_, 0.0);
+        position_states_.assign(num_joints_, 0.0);
+        velocity_states_.assign(num_joints_, 0.0);
+        // effort_states_.assign(num_joints_, 0.0);
         // loadJointParameters();
 
         RCLCPP_INFO(LOGGER,
@@ -66,7 +69,7 @@ namespace arctos_hardware_interface
         // Collect joint names for service initialization
         // std::vector<std::string> joint_names;
         // joint_names.reserve(info_.joints.size());
-        // Process joints and their interface
+        // Process joints and their interface. gripper also has a can_id and gear_ratio
         can_ids_.reserve(info_.joints.size());
         gear_ratios_.reserve(info_.joints.size());
         for (size_t i = 0; i < info_.joints.size(); i++)
@@ -199,10 +202,15 @@ namespace arctos_hardware_interface
                 hw::HW_IF_VELOCITY,
                 &velocity_states_[i]);
         }
-        // state_interfaces.emplace_back(
-        //     "Right_jaw_joint",
-        //     hw::HW_IF_POSITION,
-        //     &gripper_state_);
+        // gripper joint
+        state_interfaces.emplace_back(
+            "Right_jaw_joint",
+            hw::HW_IF_POSITION,
+            &gripper_pos_);
+        state_interfaces.emplace_back(
+            "Right_jaw_joint",
+            hw::HW_IF_VELOCITY,
+            &gripper_vel_);
         RCLCPP_INFO(LOGGER,
                     "Exported %zu state interfaces", state_interfaces.size());
         return state_interfaces;
@@ -219,10 +227,10 @@ namespace arctos_hardware_interface
                 hw::HW_IF_POSITION,
                 &position_commands_[i]);
         }
-        // cmds.emplace_back(
-        //    "Right_jaw_joint",
-        //     hw::HW_IF_POSITION,
-        //     &gripper_cmd_);
+        cmds.emplace_back(
+           "Right_jaw_joint",
+            hw::HW_IF_POSITION,
+            &gripper_cmd_);
 
         RCLCPP_INFO(LOGGER,
                     "Exported %zu command interfaces", cmds.size());
@@ -232,7 +240,7 @@ namespace arctos_hardware_interface
     hw::return_type ArctosHardwareInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration &period)
     {
         // position_states_ = position_commands_;
-        // gripper_state_ = gripper_cmd_;
+        // effort_states_ = 0.0;
         // return hardware_interface::return_type::OK;
 
         double dt = period.seconds();
@@ -255,12 +263,17 @@ namespace arctos_hardware_interface
             {
                 rad = std::fmod(rad + M_PI, 2.0 * M_PI) - M_PI; // Normalize
             }
+            position_states_[i] = std::isfinite(rad) ? rad : 0.0;
 
-            position_states_[i] = rad;
+            RCLCPP_DEBUG(LOGGER,
+                         "Reading state from joint '%s': %.3f rad",
+                         info_.joints[i].name.c_str(), position_states_[i]);
 
             // Calculate velocity with proper bounds checking
             updateJointVelocity(i, prev, dt);
         }
+        gripper_pos_ = gripper_cmd_;
+        gripper_vel_ = 0.0;
 
         return hardware_interface::return_type::OK;
     }
@@ -287,12 +300,6 @@ namespace arctos_hardware_interface
         (void)time;
         (void)period;
 
-        // static int write_count = 0;
-        // if (write_count++ % 100 == 0)
-        // {
-        //     RCLCPP_DEBUG(LOGGER, "Write called %d times", write_count);
-        // }
-
         for (size_t i = 0; i < num_joints_; ++i)
         {
             // Only send command if NOT homing (homing is a special "search" move)
@@ -300,9 +307,9 @@ namespace arctos_hardware_interface
             double cmd = position_commands_[i];
             if (std::fabs(cmd - position_states_[i]) > POSITION_CHANGE_THRESHOLD)
             {
-                RCLCPP_DEBUG(LOGGER,
-                             "Sending command to joint '%s': %.3f rad (current: %.3f)",
-                             info_.joints[i].name.c_str(), cmd, position_states_[i]);
+                RCLCPP_INFO(LOGGER,
+                            "Sending command to joint '%s': %.3f rad (current: %.3f)",
+                            info_.joints[i].name.c_str(), cmd, position_states_[i]);
                 int32_t target_pos = radiansToCounts(cmd, gear_ratios_[i]);
                 can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
             }
@@ -316,18 +323,6 @@ namespace arctos_hardware_interface
 
         return hardware_interface::return_type::OK;
     }
-
-    // bool ArctosHardwareInterface::hasCommandsChanged() const
-    // {
-    //     for (size_t i = 0; i < position_commands_.size(); ++i)
-    //     {
-    //         if (std::fabs(position_commands_[i] - position_states_[i]) > POSITION_CHANGE_THRESHOLD)
-    //         {
-    //             return true;
-    //         }
-    //     }
-    //     return false;
-    // }
 
 } // namespace arctos_hardware_interface
 

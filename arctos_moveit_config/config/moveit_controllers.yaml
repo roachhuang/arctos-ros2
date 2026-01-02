@@ -20,9 +20,15 @@ moveit_simple_controller_manager:
     default: true
     
   gripper_controller:
-    type: FollowJointTrajectory
+    # type: FollowJointTrajectory
+    type: GripperCommand
     joints:
       - Right_jaw_joint
-      - Left_jaw_joint
-    action_ns: follow_joint_trajectory
+      # - Left_jaw_joint
+    action_ns: gripper_cmd
     default: true
+    # execution_type: none
+
+trajectory_execution:
+  allowed_execution_duration_scaling: 2.0  # Allow 2x the planned time
+  allowed_goal_duration_margin: 0.5        # Allow 0.5s extra at the end

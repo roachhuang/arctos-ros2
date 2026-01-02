@@ -77,60 +77,55 @@
 - Utilize MTC's built-in stages for common operations (e.g., MoveTo, Pick, Place)
 - Implement custom stages when necessary for specialized behavior
 - Use MTC's error handling and recovery mechanisms
-- Integrate MTC with MoveIt 2 planning and execution pipelines
-- Follow MTC community guidelines for contributing to open-source projects
+# AI Coding Assistant Notes — arctos (focused)
 
-## Code Quality
-- Use meaningful variable and function names that clearly describe their purpose
-- Include helpful comments for complex logic
-- Add error handling for calling low level interface, external api, h/w drivers.
-- Avoid code duplication by creating reusable functions or classes
-- Regularly refactor code to improve readability and maintainability
-- Use version control effectively with clear commit messages
-- Conduct code reviews to ensure adherence to coding standards and best practices
-- Document public APIs and modules with clear docstrings or comments
-- Apply clean code guidlines and SOLID principle 
+This file gives concise, actionable guidance for AI coding agents working in this repository. Keep answers specific, reference files, and prefer minimal, testable changes.
 
-## Documentation
-- Maintain up-to-date documentation for all modules and functions
-- Use docstrings in Python and Doxygen comments in C++
-- Provide examples for complex functions or classes
-- Keep README files current with installation and usage instructions
-- Use markdown format for documentation files
+**Architecture Overview**
+- **ROS2 multi-package workspace:** key packages include [arctos_bringup](arctos_bringup), [arctos_description](arctos_description), [arctos_hardware_interface](arctos_hardware_interface), [arctos_moveit_config](arctos_moveit_config), [arctos_interfaces](arctos_interfaces).
+- **Hardware & controllers:** the bridge between robot and ROS is in [arctos_hardware_interface/src/arctos_hardware_interface.cpp](arctos_hardware_interface/src/arctos_hardware_interface.cpp) and controller YAMLs in [arctos_bringup/config/ros2_controllers.yaml](arctos_bringup/config/ros2_controllers.yaml) and [arctos_bringup/config/real_controllers.yaml](arctos_bringup/config/real_controllers.yaml).
+- **Simulation integration:** Gazebo and MoveIt are wired via launch files in [arctos_bringup/launch](arctos_bringup/launch) and [arctos_description/launch](arctos_description/launch). Use these to reproduce runtime behaviors.
 
-## Version Control
-- Use meaningful commit messages that describe the changes made
-- Follow a branching strategy (e.g., Git Flow, feature branches)
-- Regularly merge changes from the main branch to avoid conflicts
-- Tag releases with version numbers following semantic versioning
-- Review pull requests thoroughly before merging
-## Collaboration
-- Communicate effectively with team members about code changes and reviews
-- Participate in code reviews to provide and receive constructive feedback
-- Share knowledge and best practices with the team
-- Document decisions made during development for future reference
-- Foster a positive and inclusive team environment
-## Performance
-- Optimize code for performance where necessary, but prioritize readability and maintainability
-- Profile code to identify bottlenecks before optimizing
-- Use efficient algorithms and data structures appropriate for the task
-- Avoid premature optimization; focus on clear and correct code first
-- Test performance improvements to ensure they have the desired effect
-## Security
-- Follow best practices for secure coding to prevent vulnerabilities
-- Validate and sanitize all user inputs
-- Use secure libraries and frameworks
-- Regularly update dependencies to patch known security issues
-- Conduct security reviews and audits of the codebase
-- Handle sensitive data with care, using encryption where appropriate
-- Avoid hardcoding sensitive information such as passwords or API keys in the codebase
+**How components communicate**
+- Hardware interface exposes joints to ros2_control and is configured by YAMLs under arctos_bringup/config.
+- Action and message types live in [arctos_interfaces](arctos_interfaces) and are consumed by other packages (search for msg/ and action/ folders).
+- MoveIt / MTC examples are in mtc_tutorial and moveit launch wrappers in arctos_bringup.
+
+**Developer workflows (commands & tips)**
+- Build: `colcon build --packages-select <pkg>`; use `--symlink-install` during development.
+- Source environment: `source install/setup.bash` (always after build).
+- Launch the robot stack (sim): `ros2 launch arctos_bringup sim_robot.launch.py` or `ros2 launch arctos_bringup arctos.launch.py` for full bringup.
+- Launch MoveIt: `ros2 launch arctos_bringup my_moveit.launch.py` (see variants in launch folder).
+- Run a specific node: `ros2 run <package> <executable>` — for C++ nodes look in package CMakeLists.txt and src/ for executable names.
+
+**Repository conventions & patterns**
+- Use ROS2-style packages (CMake + package.xml); C++ code is in `src/` and headers in `include/` when present.
+- Configuration Yaml files live under package `config/` directories; prefer editing those for runtime changes instead of code when possible.
+- Launch files are Python-based and may import other launch files. Prefer launching the top-level bringup file to reproduce behavior.
+- Tests are not centralized; when adding tests, follow ament_cmake patterns and place them in `test/` or `src/test` depending on package type.
+
+**Places to read first (quick triage order)**
+- [arctos_hardware_interface/src/arctos_hardware_interface.cpp](arctos_hardware_interface/src/arctos_hardware_interface.cpp) — hardware mapping and lifecycle behavior.
+- [arctos_bringup/launch/ros2_control.launch.py](arctos_bringup/launch/ros2_control.launch.py) or similar — how controllers are loaded.
+- [arctos_bringup/config/ros2_controllers.yaml](arctos_bringup/config/ros2_controllers.yaml) — controller configs.
+- [arctos_moveit_config](arctos_moveit_config) — robot URDF and MoveIt SRDF.
+
+**Editing guidance for AI agents**
+- Make minimal, focused edits. Prefer updating YAML or launch wiring over large C++ refactors unless asked.
+- If changing behavior, add/modify a small unit or integration test where practical and run `colcon build` to validate.
+- Preserve ROS parameter keys and topics names; search the repo for exact strings before renaming.
+
+**Examples of actionable tasks**
+- Add a controller parameter: update [arctos_bringup/config/ros2_controllers.yaml](arctos_bringup/config/ros2_controllers.yaml) and the matching controller loader in the launch file.
+- Fix hardware joint mapping: modify [arctos_hardware_interface/src/arctos_hardware_interface.cpp](arctos_hardware_interface/src/arctos_hardware_interface.cpp) and verify with a `ros2 launch` of the bringup stack.
+
+**What not to do**
+- Do not change workspace-level build logic (top-level CMakeLists) without explicit instruction.
+- Avoid large API-breaking renames across packages; these require coordinated updates to launch files and YAMLs.
+
+If any file references are unclear or you want me to run builds/tests, tell me which package or launch file to exercise and I will run the commands and report results.
 ## Environment Configuration
+
 - Use environment variables for configuration settings
+
 - Avoid hardcoding environment-specific settings in the codebase
-- Document required environment variables and their purposes
-- Use configuration files (e.g., .env, config.json) for managing settings
-- Ensure sensitive information is not included in version control
-- Provide sample configuration files for development and testing
-- Use consistent naming conventions for environment variables
-
-

@@ -39,7 +39,7 @@ gripper_controller:
     joint: gripper_left_joint
     state_interfaces:
       - position
-      - velocity
+      # - velocity
     command_interfaces:
       - position
     conversion_factor: 0.0001

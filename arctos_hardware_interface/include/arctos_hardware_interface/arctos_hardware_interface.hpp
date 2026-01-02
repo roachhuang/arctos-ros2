@@ -33,7 +33,7 @@ namespace arctos_hardware_interface
   public:
     // Document what this constant represents (counts per revolution for the encoder)
     static constexpr int ENCODER_COUNTS_PER_REVOLUTION = 16384;
-    static constexpr double POSITION_CHANGE_THRESHOLD = 0.001;
+    static constexpr double POSITION_CHANGE_THRESHOLD = 0.001; // radians
     static constexpr double VELOCITY_EPSILON = 1e-9;
     static constexpr double TWO_PI = 2.0 * M_PI;
 
@@ -82,11 +82,14 @@ namespace arctos_hardware_interface
 
     // Joint state data
     static constexpr size_t DOF = 6;
+    std::vector<std::string> arm_joint_names_{"X_joint","Y_joint","Z_joint","A_joint","B_joint","C_joint"};
     std::vector<double> position_states_;
     std::vector<double> velocity_states_;
+    // std::vector<double> effort_states_;
     std::vector<double> position_commands_;
     double gripper_cmd_ = 0.0;
-    double gripper_state_ = 0.0;
+    double gripper_vel_ = 0.0;
+    double gripper_pos_ = 0.0;
 
     // std::vector<double> prev_position_commands_;
     std::vector<bool> is_homing_;

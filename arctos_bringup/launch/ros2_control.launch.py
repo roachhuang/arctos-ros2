@@ -14,7 +14,7 @@ def generate_launch_description():
     pkg_bringup = get_package_share_directory('arctos_bringup')
 
     # Path to ros2_control config
-    ros2_control_config = os.path.join(pkg_bringup, 'config', 'ros2_control.yaml')
+    ros2_control_config = os.path.join(pkg_bringup, 'config', 'ros2_controllers.yaml')
 
     # 1) Controller Manager (loads hardware + controllers)
     controller_manager = Node(

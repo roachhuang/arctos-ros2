@@ -1,13 +1,14 @@
 # This config file is used by ros2_control
 controller_manager:
   ros__parameters:
-    update_rate: 100  # todo: 100Hz - High rate for smooth EMA filtering
+    update_rate: 50  # todo: 100Hz - High rate for smooth EMA filtering
 
     arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
       
     gripper_controller:
-      type: joint_trajectory_controller/JointTrajectoryController
+      type: parallel_gripper_action_controller/GripperActionController
+      # type: gripper_controllers/GripperActionController
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
@@ -21,6 +22,8 @@ arm_controller:
       - A_joint
       - B_joint
       - C_joint
+
+    interface_name: position
     command_interfaces:
       - position
     state_interfaces:
@@ -28,31 +31,19 @@ arm_controller:
       - velocity
     allow_nonzero_velocity_at_trajectory_end: true
     open_loop_control: false
-    # constraints:
-    #   stopped_velocity_tolerance: 1000.0
-    #   goal_time: 0.0
-    #   X_joint: {trajectory: 1000.0, goal: 1000.0}
-    #   Y_joint: {trajectory: 1000.0, goal: 1000.0}
-    #   Z_joint: {trajectory: 1000.0, goal: 1000.0}
-    #   A_joint: {trajectory: 1000.0, goal: 1000.0}
-    #   B_joint: {trajectory: 1000.0, goal: 1000.0}
-    #   C_joint: {trajectory: 1000.0, goal: 1000.0}
     allow_partial_joints_goal: true
     allow_integration_in_goal_trajectories: true
 
 gripper_controller:
   ros__parameters:
-    joints:
-      - Right_jaw_joint
-    command_interfaces:
-      - position
-    state_interfaces:
-      - position
-    allow_nonzero_velocity_at_trajectory_end: true
-    allow_partial_joints_goal: true
-    allow_integration_in_goal_trajectories: true
+    joint: Right_jaw_joint
+    # action_monitor_rate: 20.0
+    # allow_stalling: false
+    # goal_tolerance: 0.01
+    # stall_timeout: 1.0
+    # stall_velocity_threshold: 0.001
 
-joint_state_broadcaster:
-  ros__parameters:
-    extra_joints:  # Explicitly publish mimic joints
-      - Left_jaw_joint
+# joint_state_broadcaster:
+#   ros__parameters:
+#     extra_joints:  # Explicitly publish mimic joints
+#       - Left_jaw_joint

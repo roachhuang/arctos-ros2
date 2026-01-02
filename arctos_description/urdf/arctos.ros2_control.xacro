@@ -47,19 +47,26 @@
       <xacro:arctos_joint name="A_joint" can_id="4" gear_ratio="48.0"/>
       <xacro:arctos_joint name="B_joint" can_id="5" gear_ratio="67.82"/>
       <xacro:arctos_joint name="C_joint" can_id="6" gear_ratio="67.82"/>
-    </ros2_control>
+      <xacro:arctos_joint name="Right_jaw_joint" can_id="7" gear_ratio="1"/>
+    <!-- </ros2_control>
 
     <ros2_control name="gripper" type="system">
       <hardware>
         <plugin>mock_components/GenericSystem</plugin>
-      </hardware>
+      </hardware> -->
 
-      <joint name="Right_jaw_joint">
+      <!-- <joint name="Right_jaw_joint">
         <command_interface name="position"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
-      </joint>
+        <state_interface name="velocity">
+          <param name="initial_value">0.0</param>
+        </state_interface>    
+        <state_interface name="effort">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+      </joint> -->
     </ros2_control>
 
   </xacro:macro>
