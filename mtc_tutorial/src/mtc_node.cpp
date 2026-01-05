@@ -49,6 +49,7 @@ void MTCTaskNode::setupPlanningScene()
 
 void MTCTaskNode::doTask()
 {
+  setupPlanningScene(); // Ensure object exists before planning
   task_ = createTask();
 
   try
@@ -61,7 +62,8 @@ void MTCTaskNode::doTask()
     return;
   }
 
-  if (!task_.plan(5))
+  // Increase planning time for real-world kinematic complexity
+  if (!task_.plan(10))
   {
     RCLCPP_ERROR_STREAM(LOGGER, "Task planning failed");
     return;
@@ -103,8 +105,14 @@ mtc::Task MTCTaskNode::createTask()
   auto sampling_planner = std::make_shared<mtc::solvers::PipelinePlanner>(node_);
   auto interpolation_planner = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
   auto cartesian_planner = std::make_shared<mtc::solvers::CartesianPath>();
-  cartesian_planner->setMaxVelocityScalingFactor(0.2); // slower
-  cartesian_planner->setMaxAccelerationScalingFactor(0.2);
+  cartesian_planner->setMaxVelocityScalingFactor(0.02); // slower
+  cartesian_planner->setMaxAccelerationScalingFactor(0.01);
+  // Also apply to your sampling planner (PipelinePlanner)
+  sampling_planner->setProperty("velocity_scaling_factor", 0.1);
+  // Also apply to the PipelinePlanner for the "Move to Pick" stage
+  sampling_planner->setProperty("velocity_scaling_factor", 0.02);
+  sampling_planner->setProperty("acceleration_scaling_factor", 0.01);
+
   cartesian_planner->setStepSize(0.01);
   cartesian_planner->setMinFraction(0.0);
 
@@ -113,6 +121,13 @@ mtc::Task MTCTaskNode::createTask()
     auto stage_open_hand =
         std::make_unique<mtc::stages::MoveTo>("open hand", interpolation_planner);
     stage_open_hand->setGroup(hand_group_name);
+
+    // Explicitly tell MTC which hardware controller to use
+    moveit::task_constructor::TrajectoryExecutionInfo exec_info;
+    exec_info.set__controller_names({"gripper_controller"});
+    // Apply to a stage
+    stage_open_hand->properties().set("trajectory_execution_info", exec_info);
+
     stage_open_hand->setGoal("open");
     task.add(std::move(stage_open_hand));
   }
@@ -141,6 +156,13 @@ mtc::Task MTCTaskNode::createTask()
         mtc::stages::Connect::GroupPlannerVector{{arm_group_name, sampling_planner}});
     stage_move_to_pick->setTimeout(5.0);
     stage_move_to_pick->properties().configureInitFrom(mtc::Stage::PARENT);
+
+    // Explicitly tell MTC which hardware controller to use
+    moveit::task_constructor::TrajectoryExecutionInfo exec_info;
+    exec_info.set__controller_names({"arm_controller"});
+    // Apply to a stage
+    stage_move_to_pick->properties().set("trajectory_execution_info", exec_info);
+
     task.add(std::move(stage_move_to_pick));
   }
 
@@ -160,6 +182,12 @@ mtc::Task MTCTaskNode::createTask()
       stage->properties().set("link", hand_frame);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
       stage->setMinMaxDistance(0.0, 0.15);
+
+      // Explicitly tell MTC which hardware controller to use
+      moveit::task_constructor::TrajectoryExecutionInfo exec_info;
+      exec_info.set__controller_names({"arm_controller"});
+      // Apply to a stage
+      stage->properties().set("trajectory_execution_info", exec_info);
 
       geometry_msgs::msg::Vector3Stamped vec;
       vec.header.frame_id = hand_frame;
@@ -181,6 +209,12 @@ mtc::Task MTCTaskNode::createTask()
       // stage->setAngleDelta(std::min(angle_delta, MIN_ANGLE_DELTA));
       stage->setAngleDelta(MIN_ANGLE_DELTA);
       stage->setMonitoredStage(current_state_ptr);
+
+      // Explicitly tell MTC which hardware controller to use
+      moveit::task_constructor::TrajectoryExecutionInfo exec_info;
+      exec_info.set__controller_names({"arm_controller"});
+      // Apply to a stage
+      stage->properties().set("trajectory_execution_info", exec_info);
 
       // Grasp frame transform: rotate to point downward
       Eigen::Isometry3d grasp_frame_transform;
@@ -216,6 +250,13 @@ mtc::Task MTCTaskNode::createTask()
     // Close hand
     {
       auto stage = std::make_unique<mtc::stages::MoveTo>("close hand", interpolation_planner);
+
+      // Explicitly tell MTC which hardware controller to use
+      moveit::task_constructor::TrajectoryExecutionInfo exec_info;
+      exec_info.set__controller_names({"gripper_controller"});
+      // Apply to a stage
+      stage->properties().set("trajectory_execution_info", exec_info);
+
       stage->setGroup(hand_group_name);
       stage->setGoal("close");
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
@@ -239,6 +280,12 @@ mtc::Task MTCTaskNode::createTask()
       stage->setIKFrame(hand_frame);
       stage->properties().set("marker_ns", "lift_object");
 
+      // Explicitly tell MTC which hardware controller to use
+      moveit::task_constructor::TrajectoryExecutionInfo exec_info;
+      exec_info.set__controller_names({"arm_controller"});
+      // Apply to a stage
+      stage->properties().set("trajectory_execution_info", exec_info);
+
       geometry_msgs::msg::Vector3Stamped vec;
       vec.header.frame_id = "world";
       vec.vector.z = 1.0;
@@ -256,6 +303,13 @@ mtc::Task MTCTaskNode::createTask()
         mtc::stages::Connect::GroupPlannerVector{{arm_group_name, sampling_planner}});
     stage_move_to_place->setTimeout(5.0);
     stage_move_to_place->properties().configureInitFrom(mtc::Stage::PARENT);
+
+    // Explicitly tell MTC which hardware controller to use
+    moveit::task_constructor::TrajectoryExecutionInfo exec_info;
+    exec_info.set__controller_names({"arm_controller"});
+    // Apply to a stage
+    stage_move_to_place->properties().set("trajectory_execution_info", exec_info);
+
     task.add(std::move(stage_move_to_place));
   }
 
@@ -298,6 +352,13 @@ mtc::Task MTCTaskNode::createTask()
     // Open hand
     {
       auto stage = std::make_unique<mtc::stages::MoveTo>("open hand", interpolation_planner);
+
+      // Explicitly tell MTC which hardware controller to use
+      moveit::task_constructor::TrajectoryExecutionInfo exec_info;
+      exec_info.set__controller_names({"gripper_controller"});
+      // Apply to a stage
+      stage->properties().set("trajectory_execution_info", exec_info);
+
       stage->setGroup(hand_group_name);
       stage->setGoal("open");
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
@@ -326,6 +387,13 @@ mtc::Task MTCTaskNode::createTask()
     // Retreat
     {
       auto stage = std::make_unique<mtc::stages::MoveRelative>("retreat", cartesian_planner);
+
+      // Explicitly tell MTC which hardware controller to use
+      moveit::task_constructor::TrajectoryExecutionInfo exec_info;
+      exec_info.set__controller_names({"arm_controller"});
+      // Apply to a stage
+      stage->properties().set("trajectory_execution_info", exec_info);
+
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
       stage->setMinMaxDistance(0.02, 0.3);
       stage->setIKFrame(hand_frame);
@@ -345,6 +413,13 @@ mtc::Task MTCTaskNode::createTask()
   // ===== RETURN HOME =====
   {
     auto stage = std::make_unique<mtc::stages::MoveTo>("return home", interpolation_planner);
+
+    // Explicitly tell MTC which hardware controller to use
+    moveit::task_constructor::TrajectoryExecutionInfo exec_info;
+    exec_info.set__controller_names({"arm_controller"});
+    // Apply to a stage
+    stage->properties().set("trajectory_execution_info", exec_info);
+
     stage->setGroup(arm_group_name);
     stage->setGoal("home");
     task.add(std::move(stage));

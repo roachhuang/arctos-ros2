@@ -24,16 +24,37 @@ arm_controller:
       - B_joint
       - C_joint
 
-    interface_name: position
     command_interfaces:
       - position
     state_interfaces:
       - position
       - velocity
-    allow_nonzero_velocity_at_trajectory_end: true
+    
+    constraints:
+      # to ensure the robot is physically still before the next MTC stage begins.
+      stopped_velocity_tolerance: 0.005
+      # If not set, the controller may report "Success" while the arm is still oscillating.
+      # goal_tolerance: 0.001      
+      goal_time: 3.0  # wait up to 2s to reach goal
+      # X_joint: {trajectory: 0.25, goal: 0.05}
+      # Y_joint: {trajectory: 0.25, goal: 0.05}
+      # Z_joint: {trajectory: 0.25, goal: 0.05}
+      # A_joint: {trajectory: 0.25, goal: 0.05}
+      # B_joint: {trajectory: 0.25, goal: 0.05}
+      # C_joint: {trajectory: 0.25, goal: 0.05} 
+
+      # Right_jaw_joint:
+      #   trajectory: 0.05
+      #   goal: 0.01
+
+    # allow_nonzero_velocity_at_trajectory_end: true
     open_loop_control: false
     allow_partial_joints_goal: true
+    # help the controller interpolate smooth transitions between MTC waypoints.
     allow_integration_in_goal_trajectories: true
+
+    state_publish_rate: 25.0 # Feedback rate for MoveIt 
+    action_monitor_rate: 10.0
 
 gripper_controller:
   ros__parameters:
@@ -44,21 +65,16 @@ gripper_controller:
       - position
     state_interfaces:
       - position
-      # - velocity
-    # allow_nonzero_velocity_at_trajectory_end: true
-    # open_loop_control: false
-    # allow_partial_joints_goal: true
-    # allow_integration_in_goal_trajectories: true
+      - velocity
 
     # action_monitor_rate: 20.0
-    # allow_stalling: false
     # goal_tolerance: 0.01
-    # stall_timeout: 1.0Right_jaw_joint
-    # action_monitor_rate: 20.0
-    # allow_stalling: false
-    # goal_tolerance: 0.01
-    # stall_timeout: 1.0
-    # stall_velocity_threshold: 0.001
+    # stopped_velocity_tolerance: 0.005
+
+    # Crucial for MTC: Don't fail if the gripper hits the object and stops
+    allow_stalling: true
+    stall_timeout: 1.0
+    stall_velocity_threshold: 0.001
 
 # joint_state_broadcaster:
 #   ros__parameters:

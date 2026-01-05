@@ -240,7 +240,8 @@ namespace arctos_hardware_interface
     hw::return_type ArctosHardwareInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration &period)
     {
         // position_states_ = position_commands_;
-        // effort_states_ = 0.0;
+        // gripper_pos_ = gripper_cmd_;
+        // gripper_vel_ = 0.0;
         // return hardware_interface::return_type::OK;
 
         double dt = period.seconds();
