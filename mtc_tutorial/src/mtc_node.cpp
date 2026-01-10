@@ -106,12 +106,11 @@ mtc::Task MTCTaskNode::createTask()
   auto interpolation_planner = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
   auto cartesian_planner = std::make_shared<mtc::solvers::CartesianPath>();
   cartesian_planner->setMaxVelocityScalingFactor(0.02); // slower
-  cartesian_planner->setMaxAccelerationScalingFactor(0.01);
+  cartesian_planner->setMaxAccelerationScalingFactor(0.02);
+  
   // Also apply to your sampling planner (PipelinePlanner)
-  sampling_planner->setProperty("velocity_scaling_factor", 0.1);
-  // Also apply to the PipelinePlanner for the "Move to Pick" stage
-  sampling_planner->setProperty("velocity_scaling_factor", 0.02);
-  sampling_planner->setProperty("acceleration_scaling_factor", 0.01);
+  sampling_planner->setProperty("velocity_scaling_factor", 0.05);
+  sampling_planner->setProperty("acceleration_scaling_factor", 0.05);
 
   cartesian_planner->setStepSize(0.01);
   cartesian_planner->setMinFraction(0.0);

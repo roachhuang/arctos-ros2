@@ -1,7 +1,7 @@
 # This config file is used by ros2_control
 controller_manager:
   ros__parameters:
-    update_rate: 50  # todo: 100Hz - High rate for smooth EMA filtering
+    update_rate: 100  # todo: 100Hz - High rate for smooth EMA filtering
 
     arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
@@ -30,12 +30,13 @@ arm_controller:
       - position
       - velocity
     
+    # Trajectory constraints for MoveIt Task Constructor (MTC)
     constraints:
       # to ensure the robot is physically still before the next MTC stage begins.
-      stopped_velocity_tolerance: 0.005
+      stopped_velocity_tolerance: 0.02
       # If not set, the controller may report "Success" while the arm is still oscillating.
       # goal_tolerance: 0.001      
-      goal_time: 3.0  # wait up to 2s to reach goal
+      goal_time: 2.0  # wait up to 2s to reach goal
       # X_joint: {trajectory: 0.25, goal: 0.05}
       # Y_joint: {trajectory: 0.25, goal: 0.05}
       # Z_joint: {trajectory: 0.25, goal: 0.05}
@@ -43,16 +44,15 @@ arm_controller:
       # B_joint: {trajectory: 0.25, goal: 0.05}
       # C_joint: {trajectory: 0.25, goal: 0.05} 
 
-      # Right_jaw_joint:
-      #   trajectory: 0.05
-      #   goal: 0.01
-
     allow_nonzero_velocity_at_trajectory_end: true
     open_loop_control: false
-    allow_partial_joints_goal: true
+    allow_partial_joints_goal: false
     # help the controller interpolate smooth transitions between MTC waypoints.
     allow_integration_in_goal_trajectories: true
-
+    # Critical for real hardware
+    stopped_velocity_tolerance: 0.02
+    
+    # Timing & execution stability
     state_publish_rate: 25.0 # Feedback rate for MoveIt 
     action_monitor_rate: 10.0
 
@@ -68,7 +68,7 @@ gripper_controller:
       - velocity
 
     # action_monitor_rate: 20.0
-    # goal_tolerance: 0.01
+    goal_tolerance: 0.01
     # stopped_velocity_tolerance: 0.005
 
     # Crucial for MTC: Don't fail if the gripper hits the object and stops
