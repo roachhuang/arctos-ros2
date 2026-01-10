@@ -5,13 +5,15 @@
   <xacro:arg name="use_fake_hardware" default="false"/>
 
   <!-- JOINT MACRO -->
-  <xacro:macro name="arctos_joint" params="name can_id gear_ratio">
+  <xacro:macro name="arctos_joint" params="name can_id gear_ratio limit_l limit_u" >
     <joint name="${name}">
       <param name="can_id">${can_id}</param>
       <param name="gear_ratio">${gear_ratio}</param>
 
-      <command_interface name="position"/>
-
+      <command_interface name="position">
+        <param name="min">${limit_l}</param>
+        <param name="max">${limit_u}</param>
+      </command_interface>
       <state_interface name="position">
         <param name="initial_value">0.0</param>
       </state_interface>
@@ -35,19 +37,20 @@
           <class_type>arctos_hardware_interface::ArctosHardwareInterface</class_type>
 
           <param name="can_interface">can0</param>
-          <param name="accel">10</param>
+          <param name="accel">20</param>
           <param name="vel">100</param>
         </xacro:unless>
       </hardware>
 
       <!-- JOINT DEFINITIONS -->
-      <xacro:arctos_joint name="X_joint" can_id="1" gear_ratio="13.5"/>
-      <xacro:arctos_joint name="Y_joint" can_id="2" gear_ratio="-150.0"/>
-      <xacro:arctos_joint name="Z_joint" can_id="3" gear_ratio="150.0"/>
-      <xacro:arctos_joint name="A_joint" can_id="4" gear_ratio="48.0"/>
-      <xacro:arctos_joint name="B_joint" can_id="5" gear_ratio="67.82"/>
-      <xacro:arctos_joint name="C_joint" can_id="6" gear_ratio="67.82"/>
-      <xacro:arctos_joint name="Right_jaw_joint" can_id="7" gear_ratio="1"/>
+      <xacro:arctos_joint name="X_joint" can_id="1" gear_ratio="13.5" limit_l="${X_min_pos}" limit_u="${X_max_pos}"/>
+      <xacro:arctos_joint name="Y_joint" can_id="2" gear_ratio="-150.0" limit_l="${Y_min_pos}" limit_u="${Y_max_pos}"/>
+      <xacro:arctos_joint name="Z_joint" can_id="3" gear_ratio="150.0" limit_l="${Z_min_pos}" limit_u="${Z_max_pos}"/>
+      <xacro:arctos_joint name="A_joint" can_id="4" gear_ratio="48.0" limit_l="${A_min_pos}" limit_u="${A_max_pos}"/>
+      <xacro:arctos_joint name="B_joint" can_id="5" gear_ratio="67.82" limit_l="${B_min_pos}" limit_u="${B_max_pos}"/>
+      <xacro:arctos_joint name="C_joint" can_id="6" gear_ratio="67.82" limit_l="${C_min_pos}" limit_u="${C_max_pos}"/>
+      <xacro:arctos_joint name="Right_jaw_joint" can_id="7" gear_ratio="1" limit_l="0.0"
+      limit_u="0.015"/>
     <!-- </ros2_control>
 
     <ros2_control name="gripper" type="system">

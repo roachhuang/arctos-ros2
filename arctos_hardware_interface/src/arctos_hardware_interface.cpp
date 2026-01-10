@@ -31,6 +31,9 @@ namespace arctos_hardware_interface
         position_commands_.assign(num_joints_, 0.0);
         position_states_.assign(num_joints_, 0.0);
         velocity_states_.assign(num_joints_, 0.0);
+
+        // Initialize tracking vectors
+        last_sent_command_.assign(num_joints_, std::numeric_limits<double>::quiet_NaN());
         // effort_states_.assign(num_joints_, 0.0);
         // loadJointParameters();
 
@@ -60,22 +63,50 @@ namespace arctos_hardware_interface
     {
         can_ids_.clear();
         gear_ratios_.clear();
-
-        can_interface_ = info_.hardware_parameters.at("can_interface");
-        vel_ = std::stod(info_.hardware_parameters.at("vel"));
-        accel_ = std::stod(info_.hardware_parameters.at("accel"));
+        min_.clear();
+        max_.clear();
+        
         // require_homing = std::stoi(info_.hardware_parameters.at("require_homing"));
 
         // Collect joint names for service initialization
         // std::vector<std::string> joint_names;
         // joint_names.reserve(info_.joints.size());
         // Process joints and their interface. gripper also has a can_id and gear_ratio
+
+        try
+        {
+            can_interface_ = info_.hardware_parameters.at("can_interface");
+            // vel: 0~3000 in RPM (100), accel: 0~256. in 1000 RPM/s (10)
+            vel_ = std::stod(info_.hardware_parameters.at("vel"));
+            accel_ = std::stod(info_.hardware_parameters.at("accel"));
+        }
+        catch (const std::exception &e)
+        {
+            RCLCPP_FATAL(LOGGER, "Missing hardware parameter: %s", e.what());
+            throw;
+        }
+
         can_ids_.reserve(info_.joints.size());
         gear_ratios_.reserve(info_.joints.size());
-        for (size_t i = 0; i < info_.joints.size(); i++)
+        for (const auto &joint : info_.joints)
         {
-            can_ids_.push_back(std::stoi(info_.joints[i].parameters.at("can_id")));
-            gear_ratios_.push_back(std::stod(info_.joints[i].parameters.at("gear_ratio")));
+            // joint_names.push_back(joint.name);
+            can_ids_.push_back(std::stoi(joint.parameters.at("can_id")));
+            gear_ratios_.push_back(std::stod(joint.parameters.at("gear_ratio")));
+            for (const auto &cmd_interface : joint.command_interfaces)
+            {
+                if (cmd_interface.name == "position")
+                    try
+                    {
+                        min_.push_back(std::stod(cmd_interface.parameters.at("min")));
+                        max_.push_back(std::stod(cmd_interface.parameters.at("max")));
+                    }
+                    catch (const std::exception &e)
+                    {
+                        RCLCPP_FATAL(LOGGER, "Missing min/max parameters for joint %s: %s", joint.name.c_str(), e.what());
+                        throw;
+                    }
+            }
         }
     }
 
@@ -132,6 +163,7 @@ namespace arctos_hardware_interface
 
                 position_states_[i] = rad;
                 position_commands_[i] = rad; // Init commands to match current state
+                last_sent_command_[i] = rad; // Initialize tracking
 
                 RCLCPP_INFO(LOGGER,
                             "Joint '%s' current position: %.4f rad (%.1f deg)",
@@ -228,7 +260,7 @@ namespace arctos_hardware_interface
                 &position_commands_[i]);
         }
         cmds.emplace_back(
-           "Right_jaw_joint",
+            "Right_jaw_joint",
             hw::HW_IF_POSITION,
             &gripper_cmd_);
 
@@ -254,8 +286,7 @@ namespace arctos_hardware_interface
         {
             double prev = position_states_[i];
 
-            u_int16_t can_id = can_ids_[i];
-            int64_t pos_counts = can_driver_.getPosition(can_id);
+            int64_t pos_counts = can_driver_.getPosition(can_ids_[i]);
 
             double rad = countsToRadians(pos_counts, gear_ratios_[i]);
 
@@ -266,9 +297,9 @@ namespace arctos_hardware_interface
             }
             position_states_[i] = std::isfinite(rad) ? rad : 0.0;
 
-            RCLCPP_DEBUG(LOGGER,
-                         "Reading state from joint '%s': %.3f rad",
-                         info_.joints[i].name.c_str(), position_states_[i]);
+            // RCLCPP_INFO(LOGGER,
+            //             "Reading state from joint '%s': %.3f rad",
+            //             info_.joints[i].name.c_str(), position_states_[i]);
 
             // Calculate velocity with proper bounds checking
             updateJointVelocity(i, prev, dt);
@@ -305,14 +336,20 @@ namespace arctos_hardware_interface
         {
             // Only send command if NOT homing (homing is a special "search" move)
 
-            double cmd = position_commands_[i];
-            if (std::fabs(cmd - position_states_[i]) > POSITION_CHANGE_THRESHOLD)
+            double safe_cmd = std::clamp(position_commands_[i], min_[i], max_[i]);
+            // 2. DATA INTEGRITY: Ensure MoveIt/MTC didn't send a NaN
+            if (!std::isfinite(safe_cmd))
+                continue;
+            if (std::abs(safe_cmd - last_sent_command_[i]) > POSITION_CHANGE_THRESHOLD)
             {
-                RCLCPP_INFO(LOGGER,
-                            "Sending command to joint '%s': %.3f rad (current: %.3f)",
-                            info_.joints[i].name.c_str(), cmd, position_states_[i]);
-                int32_t target_pos = radiansToCounts(cmd, gear_ratios_[i]);
+                // RCLCPP_INFO(LOGGER,
+                //             "Sending command to joint '%s': %.3f rad (current: %.3f)",
+                //             info_.joints[i].name.c_str(), safe_cmd, position_states_[i]);
+                int32_t target_pos = radiansToCounts(safe_cmd, gear_ratios_[i]);
+
                 can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
+                // Update tracking
+                last_sent_command_[i] = safe_cmd;
             }
             else
             {

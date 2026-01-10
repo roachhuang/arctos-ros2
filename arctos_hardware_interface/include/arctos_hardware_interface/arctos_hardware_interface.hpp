@@ -21,19 +21,25 @@ namespace arctos_hardware_interface
   /**
    * @class ArctosHardwareInterface
    * @brief ROS2 hardware interface for Arctos arm via MKS CAN servo drivers
-   * 
+   *
    * Manages communication with 6-DOF arm + 2-DOF gripper through CAN interface.
    * Implements ros2_control SystemInterface for trajectory execution.
-   * 
+   *
    * @note Requires CAN interface to be available at on_configure() time
    * @note All joint parameters (CAN ID, gear ratio) must be defined in URDF
    */
   class ArctosHardwareInterface : public hw::SystemInterface
   {
   public:
-    // Document what this constant represents (counts per revolution for the encoder)
+    // (counts per revolution for the encoder), step size = 2pi/16384 radians ~ 0.00038 rads
     static constexpr int ENCODER_COUNTS_PER_REVOLUTION = 16384;
-    static constexpr double POSITION_CHANGE_THRESHOLD = 0.001; // radians
+
+    // 1. Calculate the smallest physical step
+    static constexpr double MIN_STEP = (2.0 * M_PI) / ENCODER_COUNTS_PER_REVOLUTION;
+    // 2. Set threshold to ~3 steps to filter noise
+    static constexpr double POSITION_CHANGE_THRESHOLD = MIN_STEP * 3.0;
+
+    // static constexpr double POSITION_CHANGE_THRESHOLD = 0.001; // radians
     static constexpr double VELOCITY_EPSILON = 1e-9;
     static constexpr double TWO_PI = 2.0 * M_PI;
 
@@ -76,13 +82,16 @@ namespace arctos_hardware_interface
     uint8_t accel_;
     std::string can_interface_;
 
+    std::vector<double> last_sent_command_;
     // Joint parameters from URDF
     std::vector<u_int8_t> can_ids_;
     std::vector<double> gear_ratios_;
+    std::vector<double> min_;
+    std::vector<double> max_;
 
     // Joint state data
     static constexpr size_t DOF = 6;
-    std::vector<std::string> arm_joint_names_{"X_joint","Y_joint","Z_joint","A_joint","B_joint","C_joint"};
+    std::vector<std::string> arm_joint_names_{"X_joint", "Y_joint", "Z_joint", "A_joint", "B_joint", "C_joint"};
     std::vector<double> position_states_;
     std::vector<double> velocity_states_;
     // std::vector<double> effort_states_;
@@ -124,4 +133,3 @@ namespace arctos_hardware_interface
   };
 
 } // namespace arctos_hardware_interface
-

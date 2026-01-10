@@ -331,9 +331,9 @@ mtc::Task MTCTaskNode::createTask()
       target_pose_msg.pose.position.y = PLACE_OFFSET_Y;
 
       // Correct quaternion for 180° rotation around X-axis
-      tf2::Quaternion q;
-      q.setRotation(tf2::Vector3(1, 0, 0), M_PI);
-      target_pose_msg.pose.orientation = tf2::toMsg(q);
+      // tf2::Quaternion q;
+      // q.setRotation(tf2::Vector3(1, 0, 0), M_PI);
+      // target_pose_msg.pose.orientation = tf2::toMsg(q);
 
       stage->setPose(target_pose_msg);
       stage->setMonitoredStage(attach_object_stage);
