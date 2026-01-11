@@ -48,7 +48,7 @@
       <xacro:arctos_joint name="Z_joint" can_id="3" gear_ratio="150.0" limit_l="${Z_min_pos}" limit_u="${Z_max_pos}"/>
       <xacro:arctos_joint name="A_joint" can_id="4" gear_ratio="48.0" limit_l="${A_min_pos}" limit_u="${A_max_pos}"/>
       <xacro:arctos_joint name="B_joint" can_id="5" gear_ratio="67.82" limit_l="${B_min_pos}" limit_u="${B_max_pos}"/>
-      <xacro:arctos_joint name="C_joint" can_id="6" gear_ratio="67.82" limit_l="${C_min_pos}" limit_u="${C_max_pos}"/>
+      <xacro:arctos_joint name="C_joint" can_id="6" gear_ratio="-67.82" limit_l="${C_min_pos}" limit_u="${C_max_pos}"/>
       <xacro:arctos_joint name="Right_jaw_joint" can_id="7" gear_ratio="1" limit_l="0.0"
       limit_u="0.015"/>
     <!-- </ros2_control>

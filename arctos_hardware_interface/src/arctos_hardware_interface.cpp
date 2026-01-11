@@ -65,7 +65,7 @@ namespace arctos_hardware_interface
         gear_ratios_.clear();
         min_.clear();
         max_.clear();
-        
+
         // require_homing = std::stoi(info_.hardware_parameters.at("require_homing"));
 
         // Collect joint names for service initialization
@@ -277,18 +277,20 @@ namespace arctos_hardware_interface
         // return hardware_interface::return_type::OK;
 
         double dt = period.seconds();
-        // auto positions = can_driver_.getPositions();
+        auto cnts = can_driver_.getPositions();
+        auto prev_pos = position_states_;
+
         // RCLCPP_INFO(LOGGER,
         //             "Exported %zu postions", positions.size());
 
         // Use actual number of joints, not hardcoded 6
-        for (size_t i = 0; i < num_joints_; ++i)
+        for (size_t i = 0; i < 4; ++i)
         {
-            double prev = position_states_[i];
+            // double prev = position_states_[i];
 
-            int64_t pos_counts = can_driver_.getPosition(can_ids_[i]);
+            // int64_t pos_counts = can_driver_.getPosition(can_ids_[i]);
 
-            double rad = countsToRadians(pos_counts, gear_ratios_[i]);
+            double rad = countsToRadians(cnts[i], gear_ratios_[i]);
 
             // Normalize continuous joints (X, A, C) to [-π, π]
             if (i == 0 || i == 3 || i == 5)
@@ -302,8 +304,20 @@ namespace arctos_hardware_interface
             //             info_.joints[i].name.c_str(), position_states_[i]);
 
             // Calculate velocity with proper bounds checking
-            updateJointVelocity(i, prev, dt);
+            updateJointVelocity(i, prev_pos[i], dt);
         }
+
+        double m5_pos = countsToRadians(cnts[4], gear_ratios_[4]);
+        double m6_pos = countsToRadians(cnts[5], gear_ratios_[5]);
+
+        // 2. Inverse Differential Transformation
+        // Joint B (Pitch) is the average
+        // Joint C (Roll) is the half-difference
+        position_states_[4] = (m5_pos + m6_pos) / 2.0; // Joint B (Pitch)
+        position_states_[5] = (m5_pos - m6_pos) / 2.0; // Joint C (Roll)
+        updateJointVelocity(4, prev_pos[4], dt);
+        updateJointVelocity(5, prev_pos[5], dt);
+
         gripper_pos_ = gripper_cmd_;
         gripper_vel_ = 0.0;
 
@@ -332,11 +346,34 @@ namespace arctos_hardware_interface
         (void)time;
         (void)period;
 
+        // 1. Get commands from hardware interface memory (indices 4 and 5 for B and C)
+        double joint_B_cmd = position_commands_[4]; // pitch
+        double joint_C_cmd = position_commands_[5]; // roll
+
+        // 2. Apply Differential Transformation (Actuator Space)
+        // Note: You may need to flip signs based on your specific motor mounting
+        // position_commands_[4] = joint_B_cmd + joint_C_cmd;
+        // position_commands_[5] = joint_B_cmd - joint_C_cmd;
+
         for (size_t i = 0; i < num_joints_; ++i)
         {
+            double joint_target_rad;
+            // --- DIFFERENTIAL MIXING LOGIC ---
+            if (i == 4) // Motor 5 (ID 5)
+            {
+                joint_target_rad = position_commands_[4] + position_commands_[5]; // B + C
+            }
+            else if (i == 5) // Motor 6 (ID 6)
+            {
+                joint_target_rad = position_commands_[4] - position_commands_[5]; // B - C
+            }
+            else // All other joints (0, 1, 2, 3, 6)
+            {
+                joint_target_rad = position_commands_[i];
+            }
             // Only send command if NOT homing (homing is a special "search" move)
 
-            double safe_cmd = std::clamp(position_commands_[i], min_[i], max_[i]);
+            double safe_cmd = std::clamp(joint_target_rad, min_[i], max_[i]);
             // 2. DATA INTEGRITY: Ensure MoveIt/MTC didn't send a NaN
             if (!std::isfinite(safe_cmd))
                 continue;
