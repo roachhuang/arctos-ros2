@@ -1,6 +1,7 @@
 #include "arctos_hardware_interface/arctos_hardware_interface.hpp"
 #include <algorithm>
 #include <cmath>
+#include <angles/angles.h>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -131,55 +132,38 @@ namespace arctos_hardware_interface
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         // Query all positions
-        for (u_int8_t can_id : can_ids_)
-        {
-            can_driver_.queryPosition(can_id);
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        // for (u_int8_t can_id : can_ids_)
+        // {
+        //     can_driver_.queryPosition(can_id);
+        // }
+        // std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
         // Get the position data
-        auto positions = can_driver_.getPositions();
+        auto initial_counts = can_driver_.getPositions();
 
-        if (positions.size() != num_joints_)
+        // Standard Joints (0-3)
+        for (size_t i = 0; i < 4; i++)
         {
-            RCLCPP_WARN(LOGGER,
-                        "Expected %zu positions, got %zu. Some joints may not report position.",
-                        num_joints_, positions.size());
+            double rad = countsToRadians(initial_counts[i], gear_ratios_[i]);
+            position_states_[i] = rad;
+            position_commands_[i] = rad; // Tells MoveIt "Stay where you are"
+            last_sent_command_[i] = rad; // Tells the Driver "No movement needed yet"
         }
 
-        // ✅ Process positions into position_states_ and position_commands_
-        for (size_t i = 0; i < num_joints_; i++)
-        {
-            if (i < positions.size())
-            {
-                // Convert encoder counts to radians
-                double rad = countsToRadians(positions[i], gear_ratios_[i]);
+        // Differential Pair (4-5)
+        double m5_rad = countsToRadians(initial_counts[4], gear_ratios_[4]);
+        double m6_rad = countsToRadians(initial_counts[5], gear_ratios_[5]);
 
-                // Normalize continuous joints (X, A, C) to [-π, π]
-                if (i == 0 || i == 3 || i == 5) // X_joint, A_joint, C_joint
-                {
-                    rad = std::fmod(rad + M_PI, 2.0 * M_PI) - M_PI; // Normalize
-                }
+        position_states_[4] = (m6_rad - m5_rad) / 2.0; // Pitch
+        position_states_[5] = (m5_rad + m6_rad) / 2.0; // Roll
 
-                position_states_[i] = rad;
-                position_commands_[i] = rad; // Init commands to match current state
-                last_sent_command_[i] = rad; // Initialize tracking
+        position_commands_[4] = position_states_[4];
+        position_commands_[5] = position_states_[5];
 
-                RCLCPP_INFO(LOGGER,
-                            "Joint '%s' current position: %.4f rad (%.1f deg)",
-                            info_.joints[i].name.c_str(), rad, rad * 180.0 / M_PI);
-            }
-            else
-            {
-                // Joint not reporting - initialize to zero
-                position_states_[i] = 0.0;
-                position_commands_[i] = 0.0;
-                velocity_states_[i] = 0.0; // <-- ADD THIS LINE
-                RCLCPP_WARN(LOGGER,
-                            "Joint '%s' not reporting position - initializing to 0.0 rad",
-                            info_.joints[i].name.c_str());
-            }
-        }
+        // CRITICAL: initialize tracking with Actuator Space values
+        last_sent_command_[4] = m5_rad;
+        last_sent_command_[5] = m6_rad;
+
         // Start homing procedure for all joints
         // can_ids_={1};
         // for (u_int8_t can_id : can_ids_)
@@ -313,31 +297,44 @@ namespace arctos_hardware_interface
         // 2. Inverse Differential Transformation
         // Joint B (Pitch) is the average
         // Joint C (Roll) is the half-difference
-        position_states_[4] = (m5_pos + m6_pos) / 2.0; // Joint B (Pitch)
-        position_states_[5] = (m5_pos - m6_pos) / 2.0; // Joint C (Roll)
+        position_states_[4] = (m5_pos + m6_pos) * 0.5;                      // Joint B (Pitch)
+        position_states_[5] = (m5_pos - m6_pos) * 0.5;                      // Joint C (Roll)
+        position_states_[5] = angles::normalize_angle(position_states_[5]); // Joint C (Roll)
         updateJointVelocity(4, prev_pos[4], dt);
         updateJointVelocity(5, prev_pos[5], dt);
 
-        gripper_pos_ = gripper_cmd_;
-        gripper_vel_ = 0.0;
-
+        // gripper_pos_ = gripper_cmd_;
+        // gripper_vel_ = 0.0;
+        double err = gripper_cmd_ - gripper_pos_;
+        double step = std::clamp(err, -0.02 * dt, 0.02 * dt);
+        gripper_pos_ += step;
+        gripper_vel_ = step / dt;
         return hardware_interface::return_type::OK;
     }
 
-    void ArctosHardwareInterface::updateJointVelocity(size_t joint_index, double prev_position, double dt)
+    void ArctosHardwareInterface::updateJointVelocity(size_t i, double prev_pos, double dt)
     {
+        double new_velocity;
         if (dt > VELOCITY_EPSILON)
         {
-            double new_velocity = (position_states_[joint_index] - prev_position) / dt;
+            if (i == 0 || i == 3 || i == 5)
+            {
+                double delta = angles::shortest_angular_distance(prev_pos, position_states_[i]);
+                new_velocity = delta / dt;
+            }
+            else
+            {
+                new_velocity = (position_states_[i] - prev_pos) / dt;
+            }
             // Smooth velocity with EMA (0.7 + 0.3 = 1.0) to prevent spikes
             if (std::isfinite(new_velocity))
             {
-                velocity_states_[joint_index] = 0.7 * velocity_states_[joint_index] + 0.3 * new_velocity;
+                velocity_states_[i] = 0.7 * velocity_states_[i] + 0.3 * new_velocity;
             } // Keep previous velocity if new_velocity is invalid
         }
         else
         {
-            velocity_states_[joint_index] = 0.0;
+            velocity_states_[i] = 0.0;
         }
     }
 
@@ -361,11 +358,11 @@ namespace arctos_hardware_interface
             // --- DIFFERENTIAL MIXING LOGIC ---
             if (i == 4) // Motor 5 (ID 5)
             {
-                joint_target_rad = position_commands_[4] + position_commands_[5]; // B + C
+                joint_target_rad = joint_B_cmd + joint_C_cmd; // B + C
             }
             else if (i == 5) // Motor 6 (ID 6)
             {
-                joint_target_rad = position_commands_[4] - position_commands_[5]; // B - C
+                joint_target_rad = joint_B_cmd - joint_C_cmd; // B - C
             }
             else // All other joints (0, 1, 2, 3, 6)
             {
@@ -379,21 +376,21 @@ namespace arctos_hardware_interface
                 continue;
             if (std::abs(safe_cmd - last_sent_command_[i]) > POSITION_CHANGE_THRESHOLD)
             {
-                // RCLCPP_INFO(LOGGER,
-                //             "Sending command to joint '%s': %.3f rad (current: %.3f)",
-                //             info_.joints[i].name.c_str(), safe_cmd, position_states_[i]);
+                RCLCPP_INFO(LOGGER,
+                            "Sending command to joint '%s': %.3f rad (current: %.3f)",
+                            info_.joints[i].name.c_str(), safe_cmd, position_states_[i]);
                 int32_t target_pos = radiansToCounts(safe_cmd, gear_ratios_[i]);
 
                 can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
                 // Update tracking
                 last_sent_command_[i] = safe_cmd;
             }
-            else
-            {
-                RCLCPP_DEBUG(LOGGER,
-                             "No significant command change for joint '%s'; skipping command.",
-                             info_.joints[i].name.c_str());
-            }
+            // else
+            // {
+            //     RCLCPP_INFO(LOGGER,
+            //                  "No significant command change for joint '%s'; skipping command.",
+            //                  info_.joints[i].name.c_str());
+            // }
         }
 
         return hardware_interface::return_type::OK;

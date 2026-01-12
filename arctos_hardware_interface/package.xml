@@ -23,6 +23,7 @@
   <depend>rclcpp_lifecycle</depend>
   <depend>pluginlib</depend>
   <depend>libserial-dev</depend>
+  <depend>angles</depend>
   
   <!-- <depend>ros2_control</depend> -->
   <!-- <depend>ros2_controllers</depend> -->

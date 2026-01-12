@@ -12,6 +12,7 @@ find_package(rclcpp_lifecycle REQUIRED)  # For lifecycle components
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(PkgConfig REQUIRED)
+find_package(angles REQUIRED)
 
 include_directories(include)
 
@@ -25,6 +26,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   # ${LibSerial_INCLUDE_DIRS}
   "${SERIAL_INCLUDE_DIRS}"
 )
+
+target_link_libraries(${PROJECT_NAME} angles::angles)
 
 # target_link_libraries(${PROJECT_NAME}
 #   # "${LibSerial_LIBRARIES}"
