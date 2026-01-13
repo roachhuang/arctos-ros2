@@ -10,3 +10,5 @@ insert these lines on the end of ~/.bashrc
     source /opt/ros/jazzy/setup.bash
     source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
     source ~/ros2_ws/install/setup.bash
+
+    git clone https://github.com/ArctosRobotics/ArctosGUI cd arctosgui pip3 install -r requirements.txt ./run.sh

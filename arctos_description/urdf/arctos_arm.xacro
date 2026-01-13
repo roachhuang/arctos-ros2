@@ -117,7 +117,7 @@
     name="B_joint" type="revolute"
     parent="Link_4_1" child="Link_5_1"
     origin_xyz="0.0 -0.12543 -0.00184" origin_rpy="0 0 0"
-    axis_xyz="1 0 0"
+    axis_xyz="-1 0 0"
     limit_u="${B_max_pos}" limit_l="${B_min_pos}" limit_e="16.0" limit_v="3.0"
   />
 
@@ -125,7 +125,7 @@
     name="C_joint" type="revolute"
     parent="Link_5_1" child="Link_6_1"
     origin_xyz="0.0 -0.0398 0.0" origin_rpy="0 0 0"
-    axis_xyz="0 1 0"
+    axis_xyz="0 -1 0"
     limit_u="${C_max_pos}" limit_l="${C_min_pos}" limit_e="16.0" limit_v="3.0"
   />
 

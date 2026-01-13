@@ -154,9 +154,10 @@ namespace arctos_hardware_interface
         double m5_rad = countsToRadians(initial_counts[4], gear_ratios_[4]);
         double m6_rad = countsToRadians(initial_counts[5], gear_ratios_[5]);
 
-        position_states_[4] = (m6_rad - m5_rad) / 2.0; // Pitch
-        position_states_[5] = (m5_rad + m6_rad) / 2.0; // Roll
-
+        // position_states_[4] = (m6_rad - m5_rad) / 2.0; // Pitch
+        // position_states_[5] = (m5_rad + m6_rad) / 2.0; // Roll
+        position_states_[4] = (m5_rad + m6_rad) / 2.0; // Pitch
+        position_states_[5] = (m5_rad - m6_rad) / 2.0; // Roll
         position_commands_[4] = position_states_[4];
         position_commands_[5] = position_states_[5];
 
@@ -292,7 +293,7 @@ namespace arctos_hardware_interface
         }
 
         double m5_pos = countsToRadians(cnts[4], gear_ratios_[4]);
-        double m6_pos = countsToRadians(cnts[5], gear_ratios_[5]);
+        double m6_pos = 0 - countsToRadians(cnts[5], gear_ratios_[5]);
 
         // 2. Inverse Differential Transformation
         // Joint B (Pitch) is the average
@@ -363,6 +364,7 @@ namespace arctos_hardware_interface
             else if (i == 5) // Motor 6 (ID 6)
             {
                 joint_target_rad = joint_B_cmd - joint_C_cmd; // B - C
+                joint_target_rad = -joint_target_rad;         // Invert for correct direction
             }
             else // All other joints (0, 1, 2, 3, 6)
             {
