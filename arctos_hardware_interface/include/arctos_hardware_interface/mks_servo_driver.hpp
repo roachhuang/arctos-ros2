@@ -88,19 +88,15 @@ namespace mks_servo_driver
         uint8_t getCommandStatus(u_int16_t);
         uint8_t getHomingStatus(u_int16_t id);
 
-        inline size_t can_index(uint16_t can_id)
-        {
-            // Optional: add runtime check in debug builds
-            // assert(can_id >= 1 && can_id <= 6);
-            return static_cast<size_t>(can_id - 1);
-        }
-
     private:
+        rclcpp::Clock clock_{RCL_STEADY_TIME}; // best for throttling/timing
         int sock_{-1};
         std::thread poll_thread_;
         std::mutex pos_mutex_;
         std::mutex io_mutex_;
         std::mutex status_mutex_;
+        std::mutex tx_mutex_;
+        static constexpr int kNumMotors = 6;
         std::vector<int64_t> positions_;
         std::vector<bool> in1_states_;
         std::vector<bool> in2_states_;
@@ -108,6 +104,8 @@ namespace mks_servo_driver
         std::vector<uint8_t> homing_status_;
         std::atomic<bool> running_{false};
 
+        // helpers
+        inline size_t can_index(uint16_t id) const { return id - 1; }
         void pollLoop();
         bool readAllAvailable(std::vector<can_frame> &frames);
         std::optional<int64_t> processCanFrame(const can_frame &frame);

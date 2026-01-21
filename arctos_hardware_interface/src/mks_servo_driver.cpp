@@ -91,13 +91,16 @@ namespace mks_servo_driver
 
     bool MksServoDriver::sendCmd(uint16_t id, uint8_t code, const std::vector<uint8_t> &params)
     {
-        if (sock_ < 0){
-           RCLCPP_ERROR(LOGGER, "Socket not connected!");
-           return false;
+        if (sock_ < 0)
+        {
+            RCLCPP_ERROR(LOGGER, "Socket not connected!");
+            return false;
         }
         std::vector<uint8_t> data{code};
+        data.reserve(1 + params.size() + 1);
         data.insert(data.end(), params.begin(), params.end());
         data.push_back(calcCrc(id, data));
+
         if (data.size() > 8)
         {
             RCLCPP_ERROR(LOGGER, "invalid cmd size!: %ld", data.size());
@@ -105,15 +108,17 @@ namespace mks_servo_driver
         }
 
         can_frame tx{};
-        tx.can_id = id;
-        tx.can_dlc = data.size();
+        tx.can_id = id & CAN_SFF_MASK;
+        tx.can_dlc = static_cast<__u8>(data.size());
+        // tx.can_dlc = data.size();
         std::memcpy(tx.data, data.data(), tx.can_dlc);
 
         // auto now = std::chrono::steady_clock::now();
         // auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
         // RCLCPP_INFO(LOGGER, "t_can_tx time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
 
-        return write(sock_, &tx, sizeof(tx)) == sizeof(tx);
+        std::lock_guard<std::mutex> lk(tx_mutex_);
+        return ::write(sock_, &tx, sizeof(tx)) == sizeof(tx);
     }
 
     bool MksServoDriver::runPositionAbs(uint16_t id, uint16_t speed, uint8_t accel, int32_t position)
@@ -264,7 +269,7 @@ namespace mks_servo_driver
     int64_t MksServoDriver::getPosition(uint16_t id)
     {
         if (id < 1 || id > 6)
-            return false;
+            return 0;
         std::lock_guard<std::mutex> lock(pos_mutex_);
         return positions_[can_index(id)];
     }
@@ -290,35 +295,26 @@ namespace mks_servo_driver
     // runs every 5ms
     void MksServoDriver::pollLoop()
     {
-        int query_counter = 0;
+        int tick = 0;
         while (running_)
         {
-            // Query positions every 10ms (every 2nd cycle)
-            if (query_counter % 2 == 0)
+            // Every 10ms: query wrist motors (100Hz if sleep=5ms and tick%2==0)
+            if ((tick % 2) == 0)
             {
-                for (int id = 1; id <= 6; ++id)
+                for (size_t id = 1; id <= 6; id++)
                 {
                     queryPosition(id);
                 }
-            }
-            // Query IO status every 50ms (every 10th cycle) q
-            // if (query_counter % 10 == 0)
-            // {
-            //     for (int id = 1; id <= 6; ++id)
-            //     {
-            //         queryIO(id);
-            //     }
-            // }
-            query_counter++;
+            }           
 
             std::vector<can_frame> frames;
-            readAllAvailable(frames);
-            for (const auto &frame : frames)
+            if (readAllAvailable(frames))
             {
-                // Process all command responses - processCanFrame handles everything internally
-                processCanFrame(frame);
+                for (const auto &f : frames)
+                    processCanFrame(f);
             }
-            // pollLoop runs every 5ms
+
+            ++tick;
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
     }
@@ -344,67 +340,62 @@ namespace mks_servo_driver
 
     std::optional<int64_t> MksServoDriver::processCanFrame(const can_frame &frame)
     {
-        uint16_t can_id = frame.can_id;
-        if (can_id < 1 || can_id > 6)
+        const uint16_t can_id = static_cast<uint16_t>(frame.can_id & CAN_SFF_MASK);
+        if (can_id < 1 || can_id > kNumMotors)
         {
-            RCLCPP_ERROR(LOGGER, "Received frame with invalid CAN ID: %u", can_id);
+            RCLCPP_DEBUG_THROTTLE(LOGGER, clock_, 2000,
+                                  "Drop frame: raw_can_id=0x%X masked=%u dlc=%u",
+                                  frame.can_id, can_id, frame.can_dlc);
             return std::nullopt;
         }
-        size_t idx = can_index(can_id);
-        switch (frame.data[0])
+
+        const size_t idx = can_index(can_id);
+        const uint8_t cmd = frame.data[0];
+
+        switch (cmd)
         {
         case CANCommands::READ_ENCODER:
             if (frame.can_dlc == 8)
             {
-                /* total round‑trip latency: t_servo_feedback - t_moveit_send
-                Adjust vel and acc until latency is consistent and trajectories feel smooth.
-                */
-                // auto now = std::chrono::steady_clock::now();
-                // auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-                // RCLCPP_INFO(LOGGER, "servo response time: %ld.%09ld", ns / 1000000000, ns % 1000000000);
-                int64_t position = toI48(&frame.data[1]);
+                const int64_t pos = toI48(&frame.data[1]);
                 std::lock_guard<std::mutex> lock(pos_mutex_);
-                positions_[idx] = position;
+                positions_[idx] = pos;
             }
             break;
 
         case CANCommands::READ_IO:
-        {
             if (frame.can_dlc == 3)
             {
-                uint8_t io_status = frame.data[1];
+                const uint8_t io_status = frame.data[1];
                 std::lock_guard<std::mutex> lock(io_mutex_);
-                // EN pins active low
-                in1_states_[idx] = (io_status & 0x01) == 0; // Bit 0: IN_1
-                in2_states_[idx] = (io_status & 0x02) == 0; // Bit 1: IN_2
+                in1_states_[idx] = (io_status & 0x01) == 0;
+                in2_states_[idx] = (io_status & 0x02) == 0;
             }
             break;
-        }
+
         case CANCommands::GO_HOME:
         case CANCommands::CALIBRATE:
-        {
-            if (frame.can_dlc >= 3 && frame.can_id >= 1 && frame.can_id <= 6)
+            if (frame.can_dlc >= 3)
             {
-                uint8_t status = frame.data[1];
                 std::lock_guard<std::mutex> lock(status_mutex_);
-                homing_status_[idx] = status;
+                homing_status_[idx] = frame.data[1];
             }
             break;
-        }
+
         case CANCommands::ABSOLUTE_POSITION:
         case CANCommands::ENABLE_MOTOR:
         case CANCommands::SET_ZERO_POSITION:
-        {
-            if (frame.can_dlc >= 3 && frame.can_id >= 1 && frame.can_id <= 6)
+            if (frame.can_dlc >= 3)
             {
-                uint8_t status = frame.data[1];
                 std::lock_guard<std::mutex> lock(status_mutex_);
-                command_status_[idx] = status;
+                command_status_[idx] = frame.data[1];
             }
             break;
-        }
+
         default:
-            RCLCPP_ERROR(LOGGER, "Received unhandled command: 0x%02X", frame.data[0]);
+            RCLCPP_DEBUG_THROTTLE(LOGGER, clock_, 2000,
+                                  "Unhandled cmd 0x%02X from id=%u dlc=%u",
+                                  cmd, can_id, frame.can_dlc);
             break;
         }
 
