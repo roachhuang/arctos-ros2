@@ -37,8 +37,8 @@
           <class_type>arctos_hardware_interface::ArctosHardwareInterface</class_type>
 
           <param name="can_interface">can0</param>
-          <param name="accel">20</param>
-          <param name="vel">100</param>
+          <param name="accel">200</param>
+          <param name="vel">1000</param>
         </xacro:unless>
       </hardware>
 

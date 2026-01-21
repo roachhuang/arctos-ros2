@@ -32,9 +32,12 @@ namespace arctos_hardware_interface
         position_commands_.assign(num_joints_, 0.0);
         position_states_.assign(num_joints_, 0.0);
         velocity_states_.assign(num_joints_, 0.0);
+        last_sent_counts_.assign(num_joints_, INT32_MIN);
 
         // Initialize tracking vectors
         last_sent_command_.assign(num_joints_, std::numeric_limits<double>::quiet_NaN());
+        send_accum_ = rclcpp::Duration(0, 0);
+
         // effort_states_.assign(num_joints_, 0.0);
         // loadJointParameters();
 
@@ -153,11 +156,15 @@ namespace arctos_hardware_interface
         // Differential Pair (4-5)
         double m5_rad = countsToRadians(initial_counts[4], gear_ratios_[4]);
         double m6_rad = countsToRadians(initial_counts[5], gear_ratios_[5]);
+        // m6_rad = -1 * m6_rad; // Invert motor 6 direction
+        m5_zero_ = m5_rad;
+        m6_zero_ = m6_rad;
+        wrist_zero_set_ = true;
 
         // position_states_[4] = (m6_rad - m5_rad) / 2.0; // Pitch
         // position_states_[5] = (m5_rad + m6_rad) / 2.0; // Roll
-        position_states_[4] = (m5_rad + m6_rad) / 2.0; // Pitch
-        position_states_[5] = (m5_rad - m6_rad) / 2.0; // Roll
+        position_states_[4] = 0.5 * (m5_rad + m6_rad); // Pitch
+        position_states_[5] = 0.5 * (m5_rad - m6_rad); // Roll
         position_commands_[4] = position_states_[4];
         position_commands_[5] = position_states_[5];
 
@@ -254,34 +261,22 @@ namespace arctos_hardware_interface
         return cmds;
     }
 
-    hw::return_type ArctosHardwareInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration &period)
+    hw::return_type ArctosHardwareInterface::read(const rclcpp::Time &, const rclcpp::Duration &period)
     {
-        // position_states_ = position_commands_;
-        // gripper_pos_ = gripper_cmd_;
-        // gripper_vel_ = 0.0;
-        // return hardware_interface::return_type::OK;
+        const double dt = period.seconds();
+        auto prev = position_states_;
 
-        double dt = period.seconds();
-        auto cnts = can_driver_.getPositions();
-        auto prev_pos = position_states_;
-
-        // RCLCPP_INFO(LOGGER,
-        //             "Exported %zu postions", positions.size());
-
-        // Use actual number of joints, not hardcoded 6
+        // joints 1..4 as you already do
         for (size_t i = 0; i < 4; ++i)
         {
             // double prev = position_states_[i];
 
-            // int64_t pos_counts = can_driver_.getPosition(can_ids_[i]);
+            int64_t encorder_cnt = can_driver_.getPosition(can_ids_[i]);
 
-            double rad = countsToRadians(cnts[i], gear_ratios_[i]);
+            double rad = countsToRadians(encorder_cnt, gear_ratios_[i]);
 
             // Normalize continuous joints (X, A, C) to [-π, π]
-            if (i == 0 || i == 3 || i == 5)
-            {
-                rad = std::fmod(rad + M_PI, 2.0 * M_PI) - M_PI; // Normalize
-            }
+            rad = (i == 0 || i == 3) ? angles::normalize_angle(rad) : rad;
             position_states_[i] = std::isfinite(rad) ? rad : 0.0;
 
             // RCLCPP_INFO(LOGGER,
@@ -289,28 +284,35 @@ namespace arctos_hardware_interface
             //             info_.joints[i].name.c_str(), position_states_[i]);
 
             // Calculate velocity with proper bounds checking
-            updateJointVelocity(i, prev_pos[i], dt);
+            updateJointVelocity(i, prev[i], dt);
         }
 
-        double m5_pos = countsToRadians(cnts[4], gear_ratios_[4]);
-        double m6_pos = 0 - countsToRadians(cnts[5], gear_ratios_[5]);
+        static constexpr double M6_SIGN = -1.0;
 
-        // 2. Inverse Differential Transformation
-        // Joint B (Pitch) is the average
-        // Joint C (Roll) is the half-difference
-        position_states_[4] = (m5_pos + m6_pos) * 0.5;                      // Joint B (Pitch)
-        position_states_[5] = (m5_pos - m6_pos) * 0.5;                      // Joint C (Roll)
-        position_states_[5] = angles::normalize_angle(position_states_[5]); // Joint C (Roll)
-        updateJointVelocity(4, prev_pos[4], dt);
-        updateJointVelocity(5, prev_pos[5], dt);
+        const int64_t c5 = can_driver_.getPosition(can_ids_[4]);
+        const int64_t c6 = can_driver_.getPosition(can_ids_[5]);
 
-        // gripper_pos_ = gripper_cmd_;
-        // gripper_vel_ = 0.0;
-        double err = gripper_cmd_ - gripper_pos_;
-        double step = std::clamp(err, -0.02 * dt, 0.02 * dt);
-        gripper_pos_ += step;
-        gripper_vel_ = step / dt;
-        return hardware_interface::return_type::OK;
+        double m5 = (double)c5 * 2.0 * M_PI / (gear_ratios_[4] * ENCODER_COUNTS_PER_REVOLUTION);
+        double m6 = (double)c6 * 2.0 * M_PI / (gear_ratios_[5] * ENCODER_COUNTS_PER_REVOLUTION);
+
+        m6 *= M6_SIGN;
+
+        // zero-relative
+        if (wrist_zero_set_)
+        {
+            m5 -= m5_zero_;
+            m6 -= m6_zero_;
+        }
+
+        position_states_[4] = 0.5 * (m5 + m6);                          // B
+        position_states_[5] = angles::normalize_angle(0.5 * (m5 - m6)); // C
+
+        // optional: no hard clamp here (MoveIt wants truth), but if noise causes bounds errors,
+        // clamp ONLY tiny epsilon, not hard.
+        updateJointVelocity(4, prev[4], dt);
+        updateJointVelocity(5, prev[5], dt);
+
+        return hw::return_type::OK;
     }
 
     void ArctosHardwareInterface::updateJointVelocity(size_t i, double prev_pos, double dt)
@@ -338,64 +340,84 @@ namespace arctos_hardware_interface
             velocity_states_[i] = 0.0;
         }
     }
-
-    hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &time, const rclcpp::Duration &period)
+    hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &, const rclcpp::Duration &period)
     {
-        (void)time;
-        (void)period;
+        // Match your controller update_rate=20Hz -> 50ms.
+        // If you keep controller at 20Hz, do NOT stream ABS faster than that.
+        // send_accum_ += period;
+        // if (send_accum_.seconds() < 0.05)
+        // { // 20 Hz
+        //     return hw::return_type::OK;
+        // }
+        // send_accum_ = rclcpp::Duration(0, 0);
 
-        // 1. Get commands from hardware interface memory (indices 4 and 5 for B and C)
-        double joint_B_cmd = position_commands_[4]; // pitch
-        double joint_C_cmd = position_commands_[5]; // roll
-
-        // 2. Apply Differential Transformation (Actuator Space)
-        // Note: You may need to flip signs based on your specific motor mounting
-        // position_commands_[4] = joint_B_cmd + joint_C_cmd;
-        // position_commands_[5] = joint_B_cmd - joint_C_cmd;
-
-        for (size_t i = 0; i < num_joints_; ++i)
+        for (size_t i = 0; i < 4; ++i)
         {
             double joint_target_rad;
-            // --- DIFFERENTIAL MIXING LOGIC ---
-            if (i == 4) // Motor 5 (ID 5)
-            {
-                joint_target_rad = joint_B_cmd + joint_C_cmd; // B + C
-            }
-            else if (i == 5) // Motor 6 (ID 6)
-            {
-                joint_target_rad = joint_B_cmd - joint_C_cmd; // B - C
-                joint_target_rad = -joint_target_rad;         // Invert for correct direction
-            }
-            else // All other joints (0, 1, 2, 3, 6)
-            {
-                joint_target_rad = position_commands_[i];
-            }
+            joint_target_rad = position_commands_[i];
             // Only send command if NOT homing (homing is a special "search" move)
-
             double safe_cmd = std::clamp(joint_target_rad, min_[i], max_[i]);
             // 2. DATA INTEGRITY: Ensure MoveIt/MTC didn't send a NaN
             if (!std::isfinite(safe_cmd))
                 continue;
             if (std::abs(safe_cmd - last_sent_command_[i]) > POSITION_CHANGE_THRESHOLD)
             {
-                RCLCPP_INFO(LOGGER,
-                            "Sending command to joint '%s': %.3f rad (current: %.3f)",
-                            info_.joints[i].name.c_str(), safe_cmd, position_states_[i]);
+                RCLCPP_DEBUG(LOGGER,
+                             "Sending command to joint '%s': %.3f rad (current: %.3f)",
+                             info_.joints[i].name.c_str(), safe_cmd, position_states_[i]);
                 int32_t target_pos = radiansToCounts(safe_cmd, gear_ratios_[i]);
-
                 can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
                 // Update tracking
                 last_sent_command_[i] = safe_cmd;
             }
-            // else
-            // {
-            //     RCLCPP_INFO(LOGGER,
-            //                  "No significant command change for joint '%s'; skipping command.",
-            //                  info_.joints[i].name.c_str());
-            // }
         }
 
-        return hardware_interface::return_type::OK;
+        // ----- joint limits -----
+        constexpr double B_MIN = -1.55, B_MAX = 1.55;
+        constexpr double C_MIN = -M_PI, C_MAX = M_PI;
+
+        // ----- motor6 sign (apply ONCE everywhere) -----
+        static constexpr double M6_SIGN = -1.0;
+
+        // ----- desired joints (relative) -----
+        const double B = std::clamp(position_commands_[4], B_MIN, B_MAX);
+        const double C = std::clamp(angles::normalize_angle(position_commands_[5]), C_MIN, C_MAX);
+
+        // ----- inverse differential (relative motor angles) -----
+        const double m5_rel = B + C;
+        const double m6_rel = B - C;
+
+        // ----- absolute motor targets -----
+        double m5_abs = m5_zero_ + m5_rel;
+        double m6_abs = m6_zero_ + m6_rel;
+
+        // apply motor6 sign in motor space (ONLY here and in read)
+        m6_abs *= M6_SIGN;
+
+        // ----- convert to counts (must llround, division before cast) -----
+        const int32_t c5 = (int32_t)llround(m5_abs * gear_ratios_[4] * ENCODER_COUNTS_PER_REVOLUTION / (2.0 * M_PI));
+        const int32_t c6 = (int32_t)llround(m6_abs * gear_ratios_[5] * ENCODER_COUNTS_PER_REVOLUTION / (2.0 * M_PI));
+
+        // ----- deadband in COUNTS (prevents spamming) -----
+        constexpr int32_t COUNT_EPS = 5; // tune: 5~20 counts
+        if (std::abs(c5 - last_sent_counts_[4]) > COUNT_EPS ||
+            std::abs(c6 - last_sent_counts_[5]) > COUNT_EPS)
+        {
+            can_driver_.runPositionAbs(can_ids_[4], vel_, accel_, c5);
+            can_driver_.runPositionAbs(can_ids_[5], vel_, accel_, c6);
+
+            last_sent_counts_[4] = c5;
+            last_sent_counts_[5] = c6;
+
+            RCLCPP_INFO_THROTTLE(LOGGER, *this->get_clock(), 200,
+                                 "B=%.3f C=%.3f  m5_abs=%.3f m6_abs=%.3f  c5=%d c6=%d",
+                                 B, C, m5_abs, m6_abs, c5, c6);
+        }
+
+        // ----- other joints (1-4) can stay as you already do -----
+        // (but also use count-based eps similarly)
+
+        return hw::return_type::OK;
     }
 
 } // namespace arctos_hardware_interface

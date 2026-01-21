@@ -46,16 +46,12 @@ namespace arctos_hardware_interface
     // Conversion utilities
     inline double countsToRadians(int64_t counts, double gear_ratio) const
     {
-      if (std::abs(gear_ratio) < 1e-9)
-        return 0.0; // Prevent division by near-zero
-      return static_cast<double>(counts) / ENCODER_COUNTS_PER_REVOLUTION * TWO_PI / gear_ratio;
+      return (static_cast<double>(counts) * TWO_PI) / (gear_ratio * ENCODER_COUNTS_PER_REVOLUTION);
     }
 
     inline int32_t radiansToCounts(double radians, double gear_ratio) const
     {
-      if (std::abs(gear_ratio) < 1e-9)
-        return 0; // Prevent division by near-zero
-      return static_cast<int32_t>(radians * gear_ratio / TWO_PI * ENCODER_COUNTS_PER_REVOLUTION);
+      return (int32_t)llround(radians * gear_ratio * ENCODER_COUNTS_PER_REVOLUTION / TWO_PI);
     }
 
     // SystemInterface overrides
@@ -81,13 +77,20 @@ namespace arctos_hardware_interface
     uint16_t vel_;
     uint8_t accel_;
     std::string can_interface_;
-
-    std::vector<double> last_sent_command_;
+    rclcpp::Duration send_accum_{0, 0};
+    // std::vector<double> last_joint_command_;  // size = DOF (B, C in joint space)
+    std::vector<double> last_sent_command_; // size = DOF (only valid for motors)
     // Joint parameters from URDF
     std::vector<u_int8_t> can_ids_;
     std::vector<double> gear_ratios_;
     std::vector<double> min_;
     std::vector<double> max_;
+    double m5_zero_{0.0};
+    double m6_zero_{0.0};
+    bool wrist_zero_set_{false};
+
+    rclcpp::Time last_send_time_;
+    std::vector<int32_t> last_sent_counts_;
 
     // Joint state data
     static constexpr size_t DOF = 6;

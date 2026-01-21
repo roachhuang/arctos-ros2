@@ -23,6 +23,7 @@
         <joint name="B_joint"/>
         <joint name="C_joint"/>
         <joint name="hand_tool_joint"/>
+        <link name="tool_link"/>
     </group>
     <group name="gripper">
         <!-- <joint name="gripper_base_joint"/> -->

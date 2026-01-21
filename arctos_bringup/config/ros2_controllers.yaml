@@ -16,6 +16,8 @@ controller_manager:
 
 arm_controller:
   ros__parameters:
+    angle_wraparound: 
+      - C_joint
     joints:
       - X_joint
       - Y_joint
@@ -28,7 +30,7 @@ arm_controller:
       - position
     state_interfaces:
       - position
-      - velocity
+      # - velocity
     
     # Trajectory constraints for MoveIt Task Constructor (MTC)
     constraints:
