@@ -30,7 +30,7 @@ arm_controller:
       - position
     state_interfaces:
       - position
-      # - velocity
+      - velocity
     
     # Trajectory constraints for MoveIt Task Constructor (MTC)
     constraints:
