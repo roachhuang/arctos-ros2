@@ -2,108 +2,107 @@ import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
-from launch.substitutions import Command, LaunchConfiguration
+from launch.substitutions import Command, PathJoinSubstitution
+from launch_ros.substitutions import FindPackageShare
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 
-
 def generate_launch_description():
-    declare_use_fake_hardware = DeclareLaunchArgument(
-        'use_fake_hardware',
-        default_value='false',
-        description='Set to true to use fake hardware interface'
-    )
-    use_fake_hardware = LaunchConfiguration('use_fake_hardware')
 
-    urdf_path = os.path.join(
-        get_package_share_directory('arctos_description'),
-        'urdf',
-        'arctos.urdf.xacro'
-    )
-    robot_description_content = ParameterValue(
-        Command(['xacro ', urdf_path]),
-        value_type=str
-    )
+    # --- Paths ---
+    urdf_xacro = PathJoinSubstitution([
+        FindPackageShare("arctos_description"),
+        "urdf",
+        "arctos.urdf.xacro"
+    ])
 
-    rviz_config_path = os.path.join(
-        get_package_share_directory('arctos_description'),
-        'rviz',
-        'mtc.rviz'
-    )
-
-    yaml_path = os.path.join(
+    controllers_yaml = os.path.join(
         get_package_share_directory("arctos_bringup"),
         "config",
         "ros2_controllers.yaml"
     )
 
+    rviz_config_path = os.path.join(
+        get_package_share_directory("arctos_description"),
+        "rviz",
+        "mtc.rviz"
+    )
+
+    # --- robot_state_publisher (ONLY URDF OWNER) ---
+    robot_state_publisher = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        output="screen",
+        parameters=[{
+            "robot_description": Command(["xacro ", urdf_xacro])
+        }]
+    )
+
+    # --- Static TF ---
     static_tf = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
         arguments=["0", "0", "0", "0", "0", "0", "1", "world", "base_link"],
     )
 
-    robot_state_publisher_node = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        parameters=[{'robot_description': robot_description_content}],
-    )
-
-    controller_manager_node = Node(
+    # --- ros2_control ---
+    ros2_control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[
-            {"robot_description": robot_description_content},
-            {"use_fake_hardware": use_fake_hardware},
-            yaml_path,
-        ],
+        output="screen",
+        parameters=[controllers_yaml],
     )
 
-    spawn_joint_state_broadcaster = Node(
+    # --- Controllers ---
+    joint_state_broadcaster = Node(
         package="controller_manager",
         executable="spawner",
         arguments=["joint_state_broadcaster", "--controller-manager-timeout", "60"],
     )
 
-    spawn_arm_controller = Node(
+    arm_controller = Node(
         package="controller_manager",
         executable="spawner",
         arguments=["arm_controller", "--controller-manager-timeout", "60"],
     )
 
-    spawn_gripper_controller = Node(
+    gripper_controller = Node(
         package="controller_manager",
         executable="spawner",
         arguments=["gripper_controller", "--controller-manager-timeout", "60"],
     )
 
-    moveit = IncludeLaunchDescription(
+    # --- MoveIt (NO URDF INJECTION) ---
+    move_group = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
                 get_package_share_directory("arctos_moveit_config"),
                 "launch",
                 "move_group.launch.py",
             )
-        )
+        ),
+        launch_arguments={
+            # Critical: prevent MoveIt from redefining URDF
+            "publish_robot_description": "false",
+            "publish_robot_description_semantic": "false",
+        }.items(),
     )
 
-    rviz_node = Node(
-        package='rviz2',
-        executable='rviz2',
-        arguments=['-d', rviz_config_path],
+    # --- RViz ---
+    rviz = Node(
+        package="rviz2",
+        executable="rviz2",
+        arguments=["-d", rviz_config_path],
+        output="screen",
     )
 
     return LaunchDescription([
-        declare_use_fake_hardware,
-        robot_state_publisher_node,
+        robot_state_publisher,
         static_tf,
-        controller_manager_node,
-        spawn_joint_state_broadcaster,
-        spawn_arm_controller,
-        spawn_gripper_controller,
-        moveit,
-        rviz_node,
-        # spawn_commander,  # add if you want commander running
+        ros2_control_node,
+        joint_state_broadcaster,
+        arm_controller,
+        gripper_controller,
+        move_group,
+        rviz,
     ])
-    
