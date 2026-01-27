@@ -49,18 +49,18 @@ joint_limits:
     min_position: -1.55     # Matches URDF exactly
     max_position: 1.55      # Matches URDF exactly
     has_velocity_limits: true
-    max_velocity: 0.6
+    max_velocity: 3.0
     has_acceleration_limits: true
-    max_acceleration: 1.0
+    max_acceleration: 1.5
 
   C_joint:
     has_position_limits: true
     min_position: -3.14159  # -π
     max_position: 3.14159   # +π
     has_velocity_limits: true
-    max_velocity: 0.8
+    max_velocity: 3.0
     has_acceleration_limits: true
-    max_acceleration: 1.2
+    max_acceleration: 1.5
 
   Left_jaw_joint:
     has_position_limits: true

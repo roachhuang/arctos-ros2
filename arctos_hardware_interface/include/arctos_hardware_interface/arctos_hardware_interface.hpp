@@ -31,13 +31,19 @@ namespace arctos_hardware_interface
   class ArctosHardwareInterface : public hw::SystemInterface
   {
   public:
+    static constexpr double M6_SIGN = -1.0;
     // (counts per revolution for the encoder), step size = 2pi/16384 radians ~ 0.00038 rads
     static constexpr int ENCODER_COUNTS_PER_REVOLUTION = 16384;
 
     // 1. Calculate the smallest physical step
-    static constexpr double MIN_STEP = (2.0 * M_PI) / ENCODER_COUNTS_PER_REVOLUTION;
-    // 2. Set threshold to ~3 steps to filter noise
-    static constexpr double POSITION_CHANGE_THRESHOLD = MIN_STEP * 3.0;
+    inline double min_step_joint(double gear_ratio)
+    {
+      return TWO_PI / (gear_ratio * ENCODER_COUNTS_PER_REVOLUTION);
+    }
+    inline double threshold_joint(double gear_ratio)
+    {
+      return 3.0 * min_step_joint(gear_ratio);
+    }
 
     // static constexpr double POSITION_CHANGE_THRESHOLD = 0.001; // radians
     static constexpr double VELOCITY_EPSILON = 1e-9;
@@ -71,11 +77,13 @@ namespace arctos_hardware_interface
     // Core components
     // std::shared_ptr<ServoCanSimple> can_driver_;
     mks_servo_driver::MksServoDriver can_driver_;
+    // ----- motor6 sign (apply ONCE everywhere) -----
 
     // Configuration
     std::size_t num_joints_;
-    uint16_t vel_;
-    uint8_t accel_;
+    // note that vel_ is motor RPM, not joint rad/s
+    uint16_t vel_;  // 0-3000 RPM
+    uint8_t accel_; // 0-255
     std::string can_interface_;
     rclcpp::Duration send_accum_{0, 0};
     // std::vector<double> last_joint_command_;  // size = DOF (B, C in joint space)
