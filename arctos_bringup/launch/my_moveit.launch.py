@@ -104,5 +104,5 @@ def generate_launch_description():
         arm_controller,
         gripper_controller,
         move_group,
-        rviz,
+        # rviz,
     ])

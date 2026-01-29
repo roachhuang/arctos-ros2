@@ -92,6 +92,8 @@ mtc::Task MTCTaskNode::createTask()
   task.setProperty("group", arm_group_name);
   task.setProperty("eef", hand_group_name);
   task.setProperty("ik_frame", hand_frame);
+  task.setProperty("max_velocity_scaling_factor", 0.2);
+  task.setProperty("max_acceleration_scaling_factor", 0.2);
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
@@ -105,15 +107,18 @@ mtc::Task MTCTaskNode::createTask()
   auto sampling_planner = std::make_shared<mtc::solvers::PipelinePlanner>(node_);
   auto interpolation_planner = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
   auto cartesian_planner = std::make_shared<mtc::solvers::CartesianPath>();
-  cartesian_planner->setMaxVelocityScalingFactor(0.02); // slower
-  cartesian_planner->setMaxAccelerationScalingFactor(0.02);
-  
+
+  cartesian_planner->setMaxVelocityScalingFactor(0.5); // slower
+  cartesian_planner->setMaxAccelerationScalingFactor(0.5);
+
   // Also apply to your sampling planner (PipelinePlanner)
-  sampling_planner->setProperty("velocity_scaling_factor", 0.05);
-  sampling_planner->setProperty("acceleration_scaling_factor", 0.05);
+  sampling_planner->setProperty("max_velocity_scaling_factor", 0.2);
+  sampling_planner->setProperty("max_acceleration_scaling_factor", 0.2);
+  sampling_planner->setProperty("velocity_scaling_factor", 0.2);
+  sampling_planner->setProperty("acceleration_scaling_factor", 0.2);
 
   cartesian_planner->setStepSize(0.01);
-  cartesian_planner->setMinFraction(0.0);
+  cartesian_planner->setMinFraction(1.0);
 
   // ===== OPEN HAND =====
   {
@@ -155,6 +160,8 @@ mtc::Task MTCTaskNode::createTask()
         mtc::stages::Connect::GroupPlannerVector{{arm_group_name, sampling_planner}});
     stage_move_to_pick->setTimeout(5.0);
     stage_move_to_pick->properties().configureInitFrom(mtc::Stage::PARENT);
+    stage_move_to_pick->setProperty("velocity_scaling_factor", 0.2);
+    stage_move_to_pick->setProperty("acceleration_scaling_factor", 0.2);
 
     // Explicitly tell MTC which hardware controller to use
     moveit::task_constructor::TrajectoryExecutionInfo exec_info;
@@ -302,6 +309,8 @@ mtc::Task MTCTaskNode::createTask()
         mtc::stages::Connect::GroupPlannerVector{{arm_group_name, sampling_planner}});
     stage_move_to_place->setTimeout(5.0);
     stage_move_to_place->properties().configureInitFrom(mtc::Stage::PARENT);
+    stage_move_to_place->setProperty("velocity_scaling_factor", 0.2);
+    stage_move_to_place->setProperty("acceleration_scaling_factor", 0.2);
 
     // Explicitly tell MTC which hardware controller to use
     moveit::task_constructor::TrajectoryExecutionInfo exec_info;
@@ -411,16 +420,20 @@ mtc::Task MTCTaskNode::createTask()
 
   // ===== RETURN HOME =====
   {
-    auto stage = std::make_unique<mtc::stages::MoveTo>("return home", interpolation_planner);
-
+    // auto stage = std::make_unique<mtc::stages::MoveTo>("return home", interpolation_planner);
+    auto stage = std::make_unique<mtc::stages::MoveTo>("return home", sampling_planner);
     // Explicitly tell MTC which hardware controller to use
     moveit::task_constructor::TrajectoryExecutionInfo exec_info;
     exec_info.set__controller_names({"arm_controller"});
     // Apply to a stage
     stage->properties().set("trajectory_execution_info", exec_info);
-
+    stage->setProperty("velocity_scaling_factor", 0.2);
+    stage->setProperty("acceleration_scaling_factor", 0.2);
+    sampling_planner->setProperty("max_velocity_scaling_factor", 0.2);
+    sampling_planner->setProperty("max_acceleration_scaling_factor", 0.2);
     stage->setGroup(arm_group_name);
     stage->setGoal("home");
+    stage->setTimeout(5.0);
     task.add(std::move(stage));
   }
 

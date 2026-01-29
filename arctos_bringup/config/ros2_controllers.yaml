@@ -57,6 +57,8 @@ arm_controller:
     # Timing & execution stability
     state_publish_rate: 25.0 # Feedback rate for MoveIt 
     action_monitor_rate: 10.0
+    
+    interpolate_from_desired_state: true
 
 gripper_controller:
   ros__parameters:

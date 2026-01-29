@@ -331,6 +331,7 @@ namespace arctos_hardware_interface
     }
     hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &, const rclcpp::Duration &period)
     {
+        (void)period; // suppress unused variable warning
         constexpr double B_EPS = 1e-4; // ~0.0057 deg
         
         // send_accum_ += period;
