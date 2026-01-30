@@ -14,20 +14,26 @@ def generate_launch_description():
         .robot_description_semantic(file_path="config/arctos.srdf")
         .robot_description_kinematics(file_path="config/kinematics.yaml")
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
-        # .planning_scene_monitor()
+        .planning_scene_monitor()
         .to_moveit_configs()
     )
 
     # 2. 準備參數字典 (整合所有內容)
     # to_dict() 已經包含了 robot_description_semantic 的內容
-    common_params = [moveit_config.to_dict()]
+    # common_params = [moveit_config.to_dict()]
 
     # 3. 定義 move_group 節點
     move_group_node = Node(
         package="moveit_ros_move_group",
         executable="move_group",
         output="screen",
-        parameters=common_params,
+        parameters=[
+            moveit_config.to_dict(),
+            # Mandatory for MTC
+            {"capabilities": "move_group/ExecuteTaskSolutionCapability"},
+            {"use_sim_time": False},
+            {"monitor_dynamics": False},
+        ],
     )
 
     # 4. 🔴 修正：定義 RViz 節點並傳入同樣的參數
@@ -41,7 +47,9 @@ def generate_launch_description():
         name="rviz2_moveit",
         output="screen",
         arguments=["-d", rviz_config_file],
-        parameters=common_params, # 這裡必須傳入，RViz 才能解析 SRDF
+        parameters=[
+            moveit_config.to_dict(),
+        ], # 這裡必須傳入，RViz 才能解析 SRDF
     )
 
     return LaunchDescription([
