@@ -22,11 +22,11 @@ def generate_launch_description():
         "ros2_controllers.yaml"
     )
 
-    rviz_config_path = os.path.join(
-        get_package_share_directory("arctos_description"),
-        "rviz",
-        "mtc.rviz"
-    )
+    # rviz_config_path = os.path.join(
+    #     get_package_share_directory("arctos_description"),
+    #     "rviz",
+    #     "mtc.rviz"
+    # )
 
     # --- robot_state_publisher (ONLY URDF OWNER) ---
     robot_state_publisher = Node(
@@ -42,7 +42,12 @@ def generate_launch_description():
     static_tf = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
-        arguments=["0", "0", "0", "0", "0", "0", "1", "world", "base_link"],
+        arguments=[
+            "--x", "0", "--y", "0", "--z", "0",
+            "--yaw", "0", "--pitch", "0", "--roll", "0",
+            "--frame-id", "world",
+            "--child-frame-id", "base_link"
+        ],
     )
 
     # --- ros2_control ---
@@ -81,20 +86,20 @@ def generate_launch_description():
                 "move_group.launch.py",
             )
         ),
-        launch_arguments={
-            # Critical: prevent MoveIt from redefining URDF
-            "publish_robot_description": "false",
-            "publish_robot_description_semantic": "false",
-        }.items(),
+        # launch_arguments={
+        #     # Critical: prevent MoveIt from redefining URDF
+        #     "publish_robot_description": "false",
+        #     "publish_robot_description_semantic": "false",
+        # }.items(),
     )
 
     # --- RViz ---
-    rviz = Node(
-        package="rviz2",
-        executable="rviz2",
-        arguments=["-d", rviz_config_path],
-        output="screen",
-    )
+    # rviz = Node(
+    #     package="rviz2",
+    #     executable="rviz2",
+    #     arguments=["-d", rviz_config_path],
+    #     output="screen",
+    # )
 
     return LaunchDescription([
         robot_state_publisher,

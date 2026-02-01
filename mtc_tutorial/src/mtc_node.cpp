@@ -420,8 +420,8 @@ mtc::Task MTCTaskNode::createTask()
 
   // ===== RETURN HOME =====
   {
-    // auto stage = std::make_unique<mtc::stages::MoveTo>("return home", interpolation_planner);
-    auto stage = std::make_unique<mtc::stages::MoveTo>("return home", sampling_planner);
+    auto stage = std::make_unique<mtc::stages::MoveTo>("return home", interpolation_planner);
+    // auto stage = std::make_unique<mtc::stages::MoveTo>("return home", sampling_planner);
     // Explicitly tell MTC which hardware controller to use
     moveit::task_constructor::TrajectoryExecutionInfo exec_info;
     exec_info.set__controller_names({"arm_controller"});

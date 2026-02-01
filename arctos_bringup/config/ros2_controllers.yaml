@@ -35,10 +35,10 @@ arm_controller:
     # Trajectory constraints for MoveIt Task Constructor (MTC)
     constraints:
       # to ensure the robot is physically still before the next MTC stage begins.
-      stopped_velocity_tolerance: 0.02
+      stopped_velocity_tolerance: 0.01
       # If not set, the controller may report "Success" while the arm is still oscillating.
       # goal_tolerance: 0.001      
-      goal_time: 2.0  # wait up to 2s to reach goal
+      goal_time: 1.5  # wait up to 2s to reach goal
       # X_joint: {trajectory: 0.25, goal: 0.05}
       # Y_joint: {trajectory: 0.25, goal: 0.05}
       # Z_joint: {trajectory: 0.25, goal: 0.05}
@@ -47,10 +47,11 @@ arm_controller:
       # C_joint: {trajectory: 0.25, goal: 0.05} 
 
     allow_nonzero_velocity_at_trajectory_end: true
+
     open_loop_control: false
     allow_partial_joints_goal: false
     # help the controller interpolate smooth transitions between MTC waypoints.
-    allow_integration_in_goal_trajectories: true
+    allow_integration_in_goal_trajectories: false
     # Critical for real hardware
     stopped_velocity_tolerance: 0.02
     
@@ -58,7 +59,7 @@ arm_controller:
     state_publish_rate: 25.0 # Feedback rate for MoveIt 
     action_monitor_rate: 10.0
     
-    interpolate_from_desired_state: true
+    interpolate_from_desired_state: false
 
 gripper_controller:
   ros__parameters:

@@ -82,8 +82,8 @@ namespace arctos_hardware_interface
     // Configuration
     std::size_t num_joints_;
     // note that vel_ is motor RPM, not joint rad/s
-    uint16_t vel_;  // 0-3000 RPM
-    uint8_t accel_; // 0-255
+    // uint16_t vel_;  // 0-3000 RPM
+    // uint8_t accel_; // 0-255
     std::string can_interface_;
     rclcpp::Duration send_accum_{0, 0};
     // std::vector<double> last_joint_command_;  // size = DOF (B, C in joint space)
@@ -91,6 +91,8 @@ namespace arctos_hardware_interface
     // Joint parameters from URDF
     std::vector<u_int8_t> can_ids_;
     std::vector<double> gear_ratios_;
+    std::vector<double> vel_;
+    std::vector<double> acc_;
     std::vector<double> min_;
     std::vector<double> max_;
     double m5_zero_{0.0};

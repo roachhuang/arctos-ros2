@@ -33,6 +33,10 @@ namespace arctos_hardware_interface
         position_states_.assign(num_joints_, 0.0);
         velocity_states_.assign(num_joints_, 0.0);
         last_sent_counts_.assign(num_joints_, INT32_MIN);
+        //can_ids_.assign(info_.joints.size(), 0);
+        //gear_ratios_.assign(info_.joints.size(), 0.0);
+        //vel_.assign(info_.joints.size(), 0.0);
+        //acc_.assign(info_.joints.size(), 0.0);
 
         // Initialize tracking vectors
         last_sent_command_.assign(num_joints_, std::numeric_limits<double>::quiet_NaN());
@@ -67,6 +71,8 @@ namespace arctos_hardware_interface
     {
         can_ids_.clear();
         gear_ratios_.clear();
+        vel_.clear();
+        acc_.clear();
         min_.clear();
         max_.clear();
 
@@ -79,24 +85,26 @@ namespace arctos_hardware_interface
 
         try
         {
-            can_interface_ = info_.hardware_parameters.at("can_interface");
-            // vel: 0~3000 in RPM (100), accel: 0~256. in 1000 RPM/s (10)
-            vel_ = std::stod(info_.hardware_parameters.at("vel"));
-            accel_ = std::stod(info_.hardware_parameters.at("accel"));
+             can_interface_ = info_.hardware_parameters.at("can_interface");
+        //     // vel: 0~3000 in RPM (100), accel: 0~256. in 1000 RPM/s (10)
+        //     vel_ = std::stod(info_.hardware_parameters.at("vel"));
+        //     accel_ = std::stod(info_.hardware_parameters.at("accel"));
         }
         catch (const std::exception &e)
         {
             RCLCPP_FATAL(LOGGER, "Missing hardware parameter: %s", e.what());
             throw;
-        }
+         }
 
-        can_ids_.reserve(info_.joints.size());
-        gear_ratios_.reserve(info_.joints.size());
         for (const auto &joint : info_.joints)
         {
             // joint_names.push_back(joint.name);
             can_ids_.push_back(std::stoi(joint.parameters.at("can_id")));
             gear_ratios_.push_back(std::stod(joint.parameters.at("gear_ratio")));
+            // rad per second
+            vel_.push_back(std::stod(joint.parameters.at("vel")));
+            acc_.push_back(std::stod(joint.parameters.at("acc")));
+
             for (const auto &cmd_interface : joint.command_interfaces)
             {
                 if (cmd_interface.name == "position")
@@ -331,13 +339,16 @@ namespace arctos_hardware_interface
     }
     hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &, const rclcpp::Duration &period)
     {
-        (void)period; // suppress unused variable warning
+        (void)period; 
+        u_int16_t rpm;                 // suppress unused variable warning
         constexpr double B_EPS = 1e-4; // ~0.0057 deg
-        
-        // send_accum_ += period;
-        // if (send_accum_.seconds() < 0.04) // 25 Hz
-        //     return hw::return_type::OK;
-        // send_accum_ = rclcpp::Duration(0, 0);
+
+        static rclcpp::Time last_send_time = this->get_clock()->now();
+        if ((this->get_clock()->now() - last_send_time).seconds() < 0.1)
+        {
+            return hw::return_type::OK;
+        }
+        last_send_time = this->get_clock()->now();
 
         for (size_t i = 0; i < 4; ++i)
         {
@@ -354,7 +365,8 @@ namespace arctos_hardware_interface
                              "Sending command to joint '%s': %.3f rad (current: %.3f)",
                              info_.joints[i].name.c_str(), safe_cmd, position_states_[i]);
                 int32_t target_pos = radiansToCounts(safe_cmd, gear_ratios_[i]);
-                can_driver_.runPositionAbs(can_ids_[i], vel_, accel_, target_pos);
+                rpm = vel_[i] * (60/TWO_PI) * gear_ratios_[i];
+                can_driver_.runPositionAbs(can_ids_[i], rpm, acc_[i], target_pos);
                 // Update tracking
                 last_sent_command_[i] = safe_cmd;
             }
@@ -378,13 +390,14 @@ namespace arctos_hardware_interface
         const int32_t c5 = radiansToCounts(m5_u_abs, gear_ratios_[4]);
         const int32_t c6 = radiansToCounts(m6_u_abs * M6_SIGN, gear_ratios_[5]); // back to physical
 
-        // ----- deadband in COUNTS (prevents spamming) -----
+        // ----- deadband in COUNTS (prevents spamming) -----        
         constexpr int32_t COUNT_EPS = 20; // tune: 5~20 counts
+        rpm = vel_[4] * (60/TWO_PI) * gear_ratios_[4];
         if (std::abs(c5 - last_sent_counts_[4]) > COUNT_EPS ||
             std::abs(c6 - last_sent_counts_[5]) > COUNT_EPS)
         {
-            can_driver_.runPositionAbs(can_ids_[4], vel_ * 1.25, accel_ * 1.25, c5);
-            can_driver_.runPositionAbs(can_ids_[5], vel_ * 1.25, accel_ * 1.25, c6);
+            can_driver_.runPositionAbs(can_ids_[4], rpm, acc_[4], c5);
+            can_driver_.runPositionAbs(can_ids_[5], rpm, acc_[5], c6);
 
             last_sent_counts_[4] = c5;
             last_sent_counts_[5] = c6;
