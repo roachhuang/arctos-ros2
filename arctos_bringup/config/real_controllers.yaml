@@ -39,7 +39,7 @@ arm_controller:
       goal_time: 0.0
 
     # open_loop_control: true
-    # allow_integration_in_goal_trajectory: true
+    allow_integration_in_goal_trajectory: true
 
 gripper_controller:
   ros__parameters:

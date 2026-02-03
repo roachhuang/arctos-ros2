@@ -1,130 +1,113 @@
+import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
-from launch.substitutions import Command, LaunchConfiguration
-from launch.conditions import UnlessCondition
+from launch.substitutions import Command, PathJoinSubstitution
+from launch_ros.substitutions import FindPackageShare
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
-import os
 
-def generate_launch_description(): 
-     # 1. Define the Launch Argument
-    declare_use_fake_hardware = DeclareLaunchArgument(
-        'use_fake_hardware',
-        default_value='false',  # Set the default value (often 'false' for real hardware)
-        description='Set to true to use fake hardware interface (for testing/simulation)'
+def generate_launch_description():
+
+    # --- Paths ---
+    urdf_xacro = PathJoinSubstitution([
+        FindPackageShare("arctos_description"),
+        "urdf",
+        "arctos.urdf.xacro"
+    ])
+
+    controllers_yaml = os.path.join(
+        get_package_share_directory("arctos_bringup"),
+        "config",
+        "ros2_controllers.yaml"
     )
-    
-    # 2. Store the argument value in a LaunchConfiguration object
-    use_fake_hardware = LaunchConfiguration('use_fake_hardware')
-              
-    urdf_path = os.path.join(
-        get_package_share_directory('arctos_description'),
-        'urdf',
-        'arctos.urdf.xacro'
+
+    # rviz_config_path = os.path.join(
+    #     get_package_share_directory("arctos_description"),
+    #     "rviz",
+    #     "mtc.rviz"
+    # )
+
+    # --- robot_state_publisher (ONLY URDF OWNER) ---
+    robot_state_publisher = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        output="screen",
+        parameters=[{
+            "robot_description": Command(["xacro ", urdf_xacro])
+        }]
     )
-    robot_description_content = ParameterValue(
-        Command(['xacro ', urdf_path]),
-        value_type=str
+
+    # --- Static TF ---
+    static_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        arguments=[
+            "--x", "0", "--y", "0", "--z", "0",
+            "--yaw", "0", "--pitch", "0", "--roll", "0",
+            "--frame-id", "world",
+            "--child-frame-id", "base_link"
+        ],
     )
-    rviz_config_path = '/home/roach/ros2_ws/src/arctos/arctos_description/rviz/default.rviz'
-    
-    # ROS2 controllers configuration file path
-    yaml_path = os.path.join(
-        # get_package_share_directory("arctos_bringup"), "config","real_controllers.yaml"
-        get_package_share_directory("arctos_bringup"), "config","ros2_controllers.yaml"
-    )
-    
-    # Robot State Publisher Node
-    robot_state_publisher_node = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        parameters=[{'robot_description': robot_description_content}],             
-    )
-    
-    controller_manager_node = Node(
+
+    # --- ros2_control ---
+    ros2_control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[
-            {"robot_description": robot_description_content},
-            yaml_path,
-        ],
-    )                       
-      
-    spawn_joint_state_broadcaster = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=[
-            "joint_state_broadcaster",
-            "--controller-manager-timeout",
-            "60",
-        ],
         output="screen",
-    )
-    
-    # Spawn arm controller after joint state broadcaster
-    spawn_arm_controller = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=[
-            "arm_controller",
-            "--controller-manager-timeout",
-            "60",
-        ],
-        output="screen",
-    )
- 
-    
-    # Spawn gripper controller last
-    spawn_gripper_controller = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=[
-            "gripper_controller",
-            "--controller-manager-timeout",
-            "60",
-        ],
-        output="screen",
-    )
- 
-    moveit = IncludeLaunchDescription(
-        os.path.join(
-            get_package_share_directory("arctos_moveit_config"),
-            "launch",
-            "move_group.launch.py",
-        ),
+        parameters=[controllers_yaml],
     )
 
-    remote_interface = IncludeLaunchDescription(
-        os.path.join(
-            get_package_share_directory("arctos_remote"),
-            "launch",
-            "alexa.launch.py",
-        ),
-    )
-    
-    spawn_commander = Node(
-        package="arctos_commander_cpp",
-        executable="spawner",      
-    )
-    
-    
-    rviz_node = Node(
-        package='rviz2',
-        executable='rviz2',
-        output='screen',
-        arguments=['-d', rviz_config_path],
+    # --- Controllers ---
+    joint_state_broadcaster = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["joint_state_broadcaster", "--controller-manager-timeout", "60"],
     )
 
-    return LaunchDescription(
-        [
-            robot_state_publisher_node,
-            controller_manager_node,
-            spawn_joint_state_broadcaster,
-            spawn_arm_controller,
-            spawn_gripper_controller,   
-            moveit,
-            rviz_node
-            # remote_interface,            
-        ]
+    arm_controller = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["arm_controller", "--controller-manager-timeout", "60"],
     )
+
+    gripper_controller = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["gripper_controller", "--controller-manager-timeout", "60"],
+    )
+
+    # --- MoveIt (NO URDF INJECTION) ---
+    move_group = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("arctos_moveit_config"),
+                "launch",
+                "move_group.launch.py",
+            )
+        ),
+        # launch_arguments={
+        #     # Critical: prevent MoveIt from redefining URDF
+        #     "publish_robot_description": "false",
+        #     "publish_robot_description_semantic": "false",
+        # }.items(),
+    )
+
+    # --- RViz ---
+    # rviz = Node(
+    #     package="rviz2",
+    #     executable="rviz2",
+    #     arguments=["-d", rviz_config_path],
+    #     output="screen",
+    # )
+
+    return LaunchDescription([
+        robot_state_publisher,
+        static_tf,
+        ros2_control_node,
+        joint_state_broadcaster,
+        arm_controller,
+        gripper_controller,
+        move_group,
+        # rviz,
+    ])

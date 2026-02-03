@@ -113,6 +113,7 @@ colcon build --base-paths ~/ros2_ws/src/arctos
 source ~/ros2_ws/install/setup.bash
 canup
 ros2 launch arctos_bringup my_moveit.launch.py
+ros2 launch mtc_tutorial pick_place_demo.launch.py
 
 sh -x src/arctos/bringup/scripts/realbot.sh
 

@@ -52,13 +52,6 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
   )
 
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  set(ament_cmake_copyright_FOUND TRUE)
-  set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
-endif()
-
 # export dependencies
 ament_export_dependencies(${dependencies})
 ament_package()

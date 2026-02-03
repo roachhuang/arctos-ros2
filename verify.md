@@ -47,6 +47,7 @@ ros2 run tf2_tools view_frames
     set current position to 0:
         cansend can0 001#9293
 ---------------------------------------------------------------------------
+to show rclcpp_debug msg for h/w interface: ros2 logger set /arm_hardware_interface DEBUG
 STEP 1:
     ros2 run robot_state_publisher robot_state_publisher --ros-args -p robot_description:="$(xacro /home/roach/ros2_ws/src/arctos/arctos_description/urdf/arctos.urdf.xacro)"
 
@@ -109,3 +110,6 @@ ros2 control list_hardware_components
 
 ros2 topic echo /joint_states
 ros2 topic list | grep arm_controller
+
+ros2 launch arctos_bringup ros2_control.launch.py \
+  --ros-args --log-level arctos_hardware_interface:=debug

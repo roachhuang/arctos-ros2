@@ -3,9 +3,9 @@
 <package format="3">
   <name>arctos_hardware_interface</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="roach@todo.todo">roach</maintainer>
-  <license>TODO: License declaration</license>
+  <description>Hardware interface for MKS servo motors via CAN bus</description>
+  <maintainer email="giraftw2002@gmail.com">Roach Huang</maintainer>
+  <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend> 
 
@@ -23,6 +23,7 @@
   <depend>rclcpp_lifecycle</depend>
   <depend>pluginlib</depend>
   <depend>libserial-dev</depend>
+  <depend>angles</depend>
   
   <!-- <depend>ros2_control</depend> -->
   <!-- <depend>ros2_controllers</depend> -->
@@ -43,6 +44,6 @@
 
   <export>
     <build_type>ament_cmake</build_type>
-    <hardware_interface plugin="${prefix}/config/hw_plugin_description.xml"/>
+    <hardware_interface plugin="${prefix}/arctos_hardware_interface.xml"/>
   </export>
 </package>
