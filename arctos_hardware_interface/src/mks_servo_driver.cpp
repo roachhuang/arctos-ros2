@@ -298,15 +298,20 @@ namespace mks_servo_driver
         int tick = 0;
         while (running_)
         {
-            // Every 10ms: query wrist motors (100Hz if sleep=5ms and tick%2==0)
-            if ((tick % 2) == 0)
+            // poll 1~4 at 10-20Hz.
+            if ((tick % 10) == 0)
             {
-                for (size_t id = 1; id <= 6; id++)
+                for (size_t id = 1; id <= 4; id++)
                 {
                     queryPosition(id);
                 }
-            }           
-
+            }  
+            // poll 5/6 at 50–100 Hz         
+            if ((tick % 2) == 0)
+            {
+                queryPosition(5);
+                queryPosition(6);
+            }
             std::vector<can_frame> frames;
             if (readAllAvailable(frames))
             {

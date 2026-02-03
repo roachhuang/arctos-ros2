@@ -33,10 +33,10 @@ namespace arctos_hardware_interface
         position_states_.assign(num_joints_, 0.0);
         velocity_states_.assign(num_joints_, 0.0);
         last_sent_counts_.assign(num_joints_, INT32_MIN);
-        //can_ids_.assign(info_.joints.size(), 0);
-        //gear_ratios_.assign(info_.joints.size(), 0.0);
-        //vel_.assign(info_.joints.size(), 0.0);
-        //acc_.assign(info_.joints.size(), 0.0);
+        // can_ids_.assign(info_.joints.size(), 0);
+        // gear_ratios_.assign(info_.joints.size(), 0.0);
+        // vel_.assign(info_.joints.size(), 0.0);
+        // acc_.assign(info_.joints.size(), 0.0);
 
         // Initialize tracking vectors
         last_sent_command_.assign(num_joints_, std::numeric_limits<double>::quiet_NaN());
@@ -85,16 +85,16 @@ namespace arctos_hardware_interface
 
         try
         {
-             can_interface_ = info_.hardware_parameters.at("can_interface");
-        //     // vel: 0~3000 in RPM (100), accel: 0~256. in 1000 RPM/s (10)
-        //     vel_ = std::stod(info_.hardware_parameters.at("vel"));
-        //     accel_ = std::stod(info_.hardware_parameters.at("accel"));
+            can_interface_ = info_.hardware_parameters.at("can_interface");
+            //     // vel: 0~3000 in RPM (100), accel: 0~256. in 1000 RPM/s (10)
+            //     vel_ = std::stod(info_.hardware_parameters.at("vel"));
+            //     accel_ = std::stod(info_.hardware_parameters.at("accel"));
         }
         catch (const std::exception &e)
         {
             RCLCPP_FATAL(LOGGER, "Missing hardware parameter: %s", e.what());
             throw;
-         }
+        }
 
         for (const auto &joint : info_.joints)
         {
@@ -140,33 +140,40 @@ namespace arctos_hardware_interface
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         // Get the position data
-        auto initial_counts = can_driver_.getPositions();
+        // auto initial_counts = can_driver_.getPositions();
 
         // Standard Joints (0-3)
         for (size_t i = 0; i < 4; i++)
         {
-            double rad = countsToRadians(initial_counts[i], gear_ratios_[i]);
+            double rad = countsToRadians(can_driver_.getPosition(can_ids_[i]), gear_ratios_[i]);
             position_states_[i] = rad;
             position_commands_[i] = rad; // Tells MoveIt "Stay where you are"
             last_sent_command_[i] = rad; // Tells the Driver "No movement needed yet"
         }
 
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        auto c5 = can_driver_.getPosition(can_ids_[4]);
+        auto c6 = can_driver_.getPosition(can_ids_[5]);
+
         // unified motor space (motor6 sign applied here!)
-        double m5_u = countsToRadians(initial_counts[4], gear_ratios_[4]);
-        double m6_u = countsToRadians(initial_counts[5], gear_ratios_[5]) * M6_SIGN;
+        double m5_u = countsToRadians(c5, gear_ratios_[4]);
+        double m6_u = countsToRadians(c6, gear_ratios_[5]) * M6_SIGN;
         m5_zero_ = m5_u;
         m6_zero_ = m6_u;
         wrist_zero_set_ = true;
 
         // Joint-space from unified motor space
-        position_states_[4] = 0.5 * (m5_u + m6_u); // Pitch
-        position_states_[5] = angles::normalize_angle(0.5 * (m5_u - m6_u));
-        position_commands_[4] = position_states_[4];
-        position_commands_[5] = position_states_[5];
+        // position_states_[4] = 0.5 * (m5_u + m6_u); // Pitch
+        // position_states_[5] = angles::normalize_angle(0.5 * (m5_u - m6_u));
+        // position_commands_[4] = position_states_[4];
+        // position_commands_[5] = position_states_[5];
+        
+        position_states_[4] = position_states_[5] = 0;
+        position_commands_[4] = position_commands_[5] = 0;
 
         // tracking in physical counts for wrist (prevents initial jump)
-        last_sent_counts_[4] = static_cast<int32_t>(initial_counts[4]);
-        last_sent_counts_[5] = static_cast<int32_t>(initial_counts[5]);
+        last_sent_counts_[4] = c5;
+        last_sent_counts_[5] = c6;
 
         // CRITICAL: initialize tracking with Actuator Space values
         // Tracking: DO NOT store motor angles in last_sent_command_ if that vector is joint-space.
@@ -301,9 +308,14 @@ namespace arctos_hardware_interface
             m6_u -= m6_zero_;
         }
 
-        position_states_[4] = 0.5 * (m5_u + m6_u);                          // B
-        position_states_[5] = angles::normalize_angle(0.5 * (m5_u - m6_u)); // C
-
+        const double K = 0.5;
+        const double B =0.5 * (m5_u + m6_u)/K;                          
+        const double C = angles::normalize_angle(0.5 * (m5_u - m6_u)/K); 
+        position_states_[4] = B;
+        position_states_[5] = C;
+        RCLCPP_INFO_THROTTLE(LOGGER, *this->get_clock(), 500,
+                                 "j5=%.2f deg, j6=%.2f deg, m5_u=%.2f deg, m6_u=%.2f deg, c5=%d c6=%d",
+                                 angles::to_degrees(B), angles::to_degrees(C), angles::to_degrees(m5_u), angles::to_degrees(m6_u), c5, c6);
         // optional: no hard clamp here (MoveIt wants truth), but if noise causes bounds errors,
         // clamp ONLY tiny epsilon, not hard.
         updateJointVelocity(4, prev[4], dt);
@@ -339,7 +351,7 @@ namespace arctos_hardware_interface
     }
     hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &, const rclcpp::Duration &period)
     {
-        (void)period; 
+        (void)period;
         u_int16_t rpm;                 // suppress unused variable warning
         constexpr double B_EPS = 1e-4; // ~0.0057 deg
 
@@ -361,11 +373,11 @@ namespace arctos_hardware_interface
                 continue;
             if (std::abs(safe_cmd - last_sent_command_[i]) > threshold_joint(gear_ratios_[i]))
             {
-                RCLCPP_DEBUG(LOGGER,
-                             "Sending command to joint '%s': %.3f rad (current: %.3f)",
-                             info_.joints[i].name.c_str(), safe_cmd, position_states_[i]);
+                // RCLCPP_DEBUG(LOGGER,
+                //              "Sending command to joint '%s': %.3f rad (current: %.3f)",
+                //              info_.joints[i].name.c_str(), safe_cmd, position_states_[i]);
                 int32_t target_pos = radiansToCounts(safe_cmd, gear_ratios_[i]);
-                rpm = vel_[i] * (60/TWO_PI) * gear_ratios_[i];
+                rpm = vel_[i] * (60 / TWO_PI) * gear_ratios_[i];
                 can_driver_.runPositionAbs(can_ids_[i], rpm, acc_[i], target_pos);
                 // Update tracking
                 last_sent_command_[i] = safe_cmd;
@@ -382,17 +394,18 @@ namespace arctos_hardware_interface
 
         if (!wrist_zero_set_)
             return hw::return_type::OK;
-
-        double m5_u_abs = m5_zero_ + (B + C);
-        double m6_u_abs = m6_zero_ + (B - C);
+        const double K = 0.5;
+        double m5_u_abs = m5_zero_ + K*(B + C);
+        double m6_u_abs = m6_zero_ + K*(B - C);
 
         // ----- convert to counts (must llround, division before cast) -----
-        const int32_t c5 = radiansToCounts(m5_u_abs, gear_ratios_[4]);
-        const int32_t c6 = radiansToCounts(m6_u_abs * M6_SIGN, gear_ratios_[5]); // back to physical
+        const double effective_gear_ratio = gear_ratios_[5]; // both joints use same gear ratio        
+        const int32_t c5 = radiansToCounts(m5_u_abs, effective_gear_ratio);
+        const int32_t c6 = radiansToCounts(m6_u_abs * M6_SIGN, effective_gear_ratio); // back to physical
 
-        // ----- deadband in COUNTS (prevents spamming) -----        
+        // ----- deadband in COUNTS (prevents spamming) -----
         constexpr int32_t COUNT_EPS = 20; // tune: 5~20 counts
-        rpm = vel_[4] * (60/TWO_PI) * gear_ratios_[4];
+        rpm = vel_[4] * (60 / TWO_PI) * effective_gear_ratio;
         if (std::abs(c5 - last_sent_counts_[4]) > COUNT_EPS ||
             std::abs(c6 - last_sent_counts_[5]) > COUNT_EPS)
         {
@@ -402,9 +415,9 @@ namespace arctos_hardware_interface
             last_sent_counts_[4] = c5;
             last_sent_counts_[5] = c6;
 
-            RCLCPP_INFO_THROTTLE(LOGGER, *this->get_clock(), 200,
-                                 "B=%.3f C=%.3f  m5_abs=%.3f m6_abs=%.3f  c5=%d c6=%d",
-                                 B, C, m5_u_abs, m6_u_abs, c5, c6);
+            RCLCPP_INFO_THROTTLE(LOGGER, *this->get_clock(), 500,
+                                 "J5=%.2f deg, J6=%.2f deg, m5_abs=%.2f deg, m6_abs=%.2f deg, c5=%d c6=%d",
+                                 angles::to_degrees(B), angles::to_degrees(C), angles::to_degrees(m5_u_abs), angles::to_degrees(m6_u_abs), c5, c6);
         }
 
         // ----- other joints (1-4) can stay as you already do -----
