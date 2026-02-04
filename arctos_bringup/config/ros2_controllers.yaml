@@ -28,6 +28,7 @@ arm_controller:
 
     command_interfaces:
       - position
+      - velocity
     state_interfaces:
       - position
       - velocity
@@ -35,10 +36,10 @@ arm_controller:
     # Trajectory constraints for MoveIt Task Constructor (MTC)
     constraints:
       # to ensure the robot is physically still before the next MTC stage begins.
-      stopped_velocity_tolerance: 0.01
+      stopped_velocity_tolerance: 0.05  # rad/s
       # If not set, the controller may report "Success" while the arm is still oscillating.
       # goal_tolerance: 0.001      
-      goal_time: 1.5  # wait up to 2s to reach goal
+      goal_time: 0.0  # wait up to 2s to reach goal
       # X_joint: {trajectory: 0.25, goal: 0.05}
       # Y_joint: {trajectory: 0.25, goal: 0.05}
       # Z_joint: {trajectory: 0.25, goal: 0.05}

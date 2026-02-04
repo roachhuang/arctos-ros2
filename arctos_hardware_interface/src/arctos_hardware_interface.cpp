@@ -30,6 +30,7 @@ namespace arctos_hardware_interface
         // in1_.resize(num_joints_, false);
         // in2_.resize(num_joints_, false);
         position_commands_.assign(num_joints_, 0.0);
+        velocity_commands_.assign(num_joints_, 0.0);
         position_states_.assign(num_joints_, 0.0);
         velocity_states_.assign(num_joints_, 0.0);
         last_sent_counts_.assign(num_joints_, INT32_MIN);
@@ -167,7 +168,7 @@ namespace arctos_hardware_interface
         // position_states_[5] = angles::normalize_angle(0.5 * (m5_u - m6_u));
         // position_commands_[4] = position_states_[4];
         // position_commands_[5] = position_states_[5];
-        
+
         position_states_[4] = position_states_[5] = 0;
         position_commands_[4] = position_commands_[5] = 0;
 
@@ -259,6 +260,8 @@ namespace arctos_hardware_interface
                 info_.joints[i].name,
                 hw::HW_IF_POSITION,
                 &position_commands_[i]);
+            // 新增：接收速度指令
+            cmds.emplace_back(info_.joints[i].name, hw::HW_IF_VELOCITY, &velocity_commands_[i]);
         }
         cmds.emplace_back(
             "Right_jaw_joint",
@@ -309,13 +312,13 @@ namespace arctos_hardware_interface
         }
 
         const double K = 0.5;
-        const double B =0.5 * (m5_u + m6_u)/K;                          
-        const double C = angles::normalize_angle(0.5 * (m5_u - m6_u)/K); 
+        const double B = 0.5 * (m5_u + m6_u) / K;
+        const double C = angles::normalize_angle(0.5 * (m5_u - m6_u) / K);
         position_states_[4] = B;
         position_states_[5] = C;
         RCLCPP_INFO_THROTTLE(LOGGER, *this->get_clock(), 500,
-                                 "j5=%.2f deg, j6=%.2f deg, m5_u=%.2f deg, m6_u=%.2f deg, c5=%d c6=%d",
-                                 angles::to_degrees(B), angles::to_degrees(C), angles::to_degrees(m5_u), angles::to_degrees(m6_u), c5, c6);
+                             "j5=%.2f deg, j6=%.2f deg, m5_u=%.2f deg, m6_u=%.2f deg, c5=%d c6=%d",
+                             angles::to_degrees(B), angles::to_degrees(C), angles::to_degrees(m5_u), angles::to_degrees(m6_u), c5, c6);
         // optional: no hard clamp here (MoveIt wants truth), but if noise causes bounds errors,
         // clamp ONLY tiny epsilon, not hard.
         updateJointVelocity(4, prev[4], dt);
@@ -352,15 +355,16 @@ namespace arctos_hardware_interface
     hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &, const rclcpp::Duration &period)
     {
         (void)period;
-        u_int16_t rpm;                 // suppress unused variable warning
+        double planned_vel_rpm;        // suppress unused variable warning
+        u_int16_t rpm = 0;             // suppress unused variable warning
         constexpr double B_EPS = 1e-4; // ~0.0057 deg
 
-        static rclcpp::Time last_send_time = this->get_clock()->now();
-        if ((this->get_clock()->now() - last_send_time).seconds() < 0.1)
-        {
-            return hw::return_type::OK;
-        }
-        last_send_time = this->get_clock()->now();
+        // static rclcpp::Time last_send_time = this->get_clock()->now();
+        // if ((this->get_clock()->now() - last_send_time).seconds() < 0.1)
+        // {
+        //     return hw::return_type::OK;
+        // }
+        // last_send_time = this->get_clock()->now();
 
         for (size_t i = 0; i < 4; ++i)
         {
@@ -373,11 +377,17 @@ namespace arctos_hardware_interface
                 continue;
             if (std::abs(safe_cmd - last_sent_command_[i]) > threshold_joint(gear_ratios_[i]))
             {
+                // double dq = abs(safe_cmd - last_sent_command_[i]);
+                // double vel = dq / period.seconds();
+
                 // RCLCPP_DEBUG(LOGGER,
                 //              "Sending command to joint '%s': %.3f rad (current: %.3f)",
                 //              info_.joints[i].name.c_str(), safe_cmd, position_states_[i]);
                 int32_t target_pos = radiansToCounts(safe_cmd, gear_ratios_[i]);
-                rpm = vel_[i] * (60 / TWO_PI) * gear_ratios_[i];
+                planned_vel_rpm = std::abs(velocity_commands_[i] * gear_ratios_[i] * (60.0 / TWO_PI));
+                rpm = std::clamp(planned_vel_rpm, 50.0, 2000.0);
+                // rpm = std::clamp(vel * gear_ratios_[i] * (60.0 / TWO_PI), 50.0, 2000.0);
+                // rpm = vel_[i] * (60 / TWO_PI) * gear_ratios_[i];
                 can_driver_.runPositionAbs(can_ids_[i], rpm, acc_[i], target_pos);
                 // Update tracking
                 last_sent_command_[i] = safe_cmd;
@@ -394,22 +404,27 @@ namespace arctos_hardware_interface
 
         if (!wrist_zero_set_)
             return hw::return_type::OK;
-        const double K = 0.5;   // diff_gain
-        double m5_u_abs = m5_zero_ + K*(B + C);
-        double m6_u_abs = m6_zero_ + K*(B - C);
+        const double K = 0.5; // diff_gain
+        double m5_u_abs = m5_zero_ + K * (B + C);
+        double m6_u_abs = m6_zero_ + K * (B - C);
 
         // ----- convert to counts (must llround, division before cast) -----
-        const double effective_gear_ratio = gear_ratios_[5]; // both joints use same gear ratio        
+        const double effective_gear_ratio = gear_ratios_[5]; // both joints use same gear ratio
         const int32_t c5 = radiansToCounts(m5_u_abs, effective_gear_ratio);
         const int32_t c6 = radiansToCounts(m6_u_abs * M6_SIGN, effective_gear_ratio); // back to physical
 
         // ----- deadband in COUNTS (prevents spamming) -----
         constexpr int32_t COUNT_EPS = 20; // tune: 5~20 counts
-        rpm = vel_[4] * (60 / TWO_PI) * effective_gear_ratio;
+        rpm = vel_[4] * (60.0 / TWO_PI);  // * effective_gear_ratio;
         if (std::abs(c5 - last_sent_counts_[4]) > COUNT_EPS ||
             std::abs(c6 - last_sent_counts_[5]) > COUNT_EPS)
         {
+            planned_vel_rpm = std::abs(velocity_commands_[4] * gear_ratios_[4] * (60.0 / TWO_PI));
+            rpm = std::clamp(planned_vel_rpm, 50.0, 2000.0);
             can_driver_.runPositionAbs(can_ids_[4], rpm, acc_[4], c5);
+
+            planned_vel_rpm = std::abs(velocity_commands_[5] * gear_ratios_[5] * (60.0 / TWO_PI));
+            rpm = std::clamp(planned_vel_rpm, 50.0, 2000.0);
             can_driver_.runPositionAbs(can_ids_[5], rpm, acc_[5], c6);
 
             last_sent_counts_[4] = c5;

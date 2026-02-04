@@ -109,6 +109,7 @@ namespace arctos_hardware_interface
     std::vector<double> velocity_states_;
     // std::vector<double> effort_states_;
     std::vector<double> position_commands_;
+    std::vector<double> velocity_commands_;
     double gripper_cmd_ = 0.0;
     double gripper_vel_ = 0.0;
     double gripper_pos_ = 0.0;

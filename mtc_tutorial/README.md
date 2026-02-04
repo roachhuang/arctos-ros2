@@ -23,3 +23,16 @@ test it:
 sudo apt install ros-jazzy-moveit-task-constructor-core
 sudo apt install ros-jazzy-moveit-task-constructor-visualization
 sudo apt install ros-jazzy-moveit-task-constructor-capabilities
+
+To get consistent speed across:
+    RViz “Plan & Execute” (MoveGroup)
+    MTC stages (Connect / MoveTo / MoveRelative)
+    Your real hardware (MKS over CAN)
+
+you need one coherent speed authority and one time base
+Make the controller the speed authority
+
+In MoveIt, speed consistency comes from:
+    joint limits (max velocity/acc)
+    scaling factors
+    time parameterization
