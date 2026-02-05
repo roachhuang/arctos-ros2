@@ -36,3 +36,9 @@ In MoveIt, speed consistency comes from:
     joint limits (max velocity/acc)
     scaling factors
     time parameterization
+
+To verify:
+Confirm controller is actually executing timed trajectories:
+ros2 topic echo /arm_controller/controller_state --once | grep -n "time_from_start"
+ros2 action list | grep arm_controller
+ros2 param get /move_group trajectory_execution.allowed_execution_duration_scaling

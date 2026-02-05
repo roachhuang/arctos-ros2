@@ -92,8 +92,8 @@ mtc::Task MTCTaskNode::createTask()
   task.setProperty("group", arm_group_name);
   task.setProperty("eef", hand_group_name);
   task.setProperty("ik_frame", hand_frame);
-  task.setProperty("velocity_scaling_factor", 0.1);
-  task.setProperty("acceleration_scaling_factor", 0.1);
+  task.setProperty("velocity_scaling_factor", 0.2);
+  task.setProperty("acceleration_scaling_factor", 0.2);
 
   task.setProperty("max_velocity_scaling_factor", 0.2);
   task.setProperty("max_acceleration_scaling_factor", 0.2);
@@ -116,8 +116,8 @@ mtc::Task MTCTaskNode::createTask()
   sampling_planner->setProperty("max_acceleration_scaling_factor", 0.2);
   interpolation_planner->setMaxVelocityScalingFactor(0.2);
   interpolation_planner->setMaxAccelerationScalingFactor(0.2);
-  cartesian_planner->setMaxVelocityScalingFactor(0.5); // slower
-  cartesian_planner->setMaxAccelerationScalingFactor(0.5);
+  cartesian_planner->setMaxVelocityScalingFactor(0.2); // slower
+  cartesian_planner->setMaxAccelerationScalingFactor(0.2);
 
   // sampling_planner->setProperty("velocity_scaling_factor", 0.2);
   // sampling_planner->setProperty("acceleration_scaling_factor", 0.2);
@@ -189,7 +189,9 @@ mtc::Task MTCTaskNode::createTask()
     {
       auto stage =
           std::make_unique<mtc::stages::MoveRelative>("approach object", cartesian_planner);
-      stage->properties().set("velocity_scaling_factor", 0.3); // 接近物體時減速
+      stage->properties().set("max_velocity_scaling_factor", 0.2); // 接近物體時減速
+      stage->properties().set("max_acceleration_scaling_factor", 0.2);
+
       stage->properties().set("marker_ns", "approach_object");
       stage->properties().set("link", hand_frame);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
