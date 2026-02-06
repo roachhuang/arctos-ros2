@@ -1,3 +1,7 @@
+/**
+ * @file arctos_hardware_interface.hpp
+ * @brief ROS2 hardware interface for Arctos arm and gripper.
+ */
 #pragma once
 
 #include <hardware_interface/system_interface.hpp>
@@ -7,9 +11,6 @@
 #include "arctos_hardware_interface/mks_servo_driver.hpp"
 
 #include <vector>
-#include <memory>
-#include <thread>
-#include <atomic>
 #include <cmath>
 #include <cstdint>
 
@@ -62,31 +63,33 @@ namespace arctos_hardware_interface
     }
 
     // SystemInterface overrides
+    /// @brief Initialize hardware interface with parameters from ROS2 control.
     CallbackReturn on_init(const hw::HardwareComponentInterfaceParams &params) override;
+    /// @brief Read latest joint states from hardware.
     hw::return_type read(const rclcpp::Time &time, const rclcpp::Duration &period) override;
+    /// @brief Write commanded joint targets to hardware.
     hw::return_type write(const rclcpp::Time &time, const rclcpp::Duration &period) override;
 
     // Lifecycle nodes overrides
+    /// @brief Configure hardware (connect CAN, load parameters).
     CallbackReturn on_configure(const rclcpp_lifecycle::State &previous_state) override;
+    /// @brief Activate hardware and synchronize joint state.
     CallbackReturn on_activate(const rclcpp_lifecycle::State &previous_state) override;
+    /// @brief Deactivate hardware and release resources.
     CallbackReturn on_deactivate(const rclcpp_lifecycle::State &previous_state) override;
 
+    /// @brief Export state interfaces for joints and gripper.
     std::vector<hw::StateInterface> export_state_interfaces() override;
+    /// @brief Export command interfaces for joints and gripper.
     std::vector<hw::CommandInterface> export_command_interfaces() override;
 
   private:
     // Core components
-    // std::shared_ptr<ServoCanSimple> can_driver_;
     mks_servo_driver::MksServoDriver can_driver_;
-    // ----- motor6 sign (apply ONCE everywhere) -----
 
     // Configuration
     std::size_t num_joints_;
-    // note that vel_ is motor RPM, not joint rad/s
-    // uint16_t vel_;  // 0-3000 RPM
-    // uint8_t accel_; // 0-255
     std::string can_interface_;
-    rclcpp::Duration send_accum_{0, 0};
     // std::vector<double> last_joint_command_;  // size = DOF (B, C in joint space)
     std::vector<double> last_sent_command_; // size = DOF (only valid for motors)
     // Joint parameters from URDF
@@ -100,7 +103,6 @@ namespace arctos_hardware_interface
     double m6_zero_{0.0};
     bool wrist_zero_set_{false};
 
-    rclcpp::Time last_send_time_;
     std::vector<int32_t> last_sent_counts_;
 
     // Joint state data
@@ -108,7 +110,6 @@ namespace arctos_hardware_interface
     std::vector<std::string> arm_joint_names_{"X_joint", "Y_joint", "Z_joint", "A_joint", "B_joint", "C_joint"};
     std::vector<double> position_states_;
     std::vector<double> velocity_states_;
-    // std::vector<double> effort_states_;
     std::vector<double> position_commands_;
     std::vector<double> velocity_commands_;
     double gripper_cmd_ = 0.0;
@@ -121,36 +122,15 @@ namespace arctos_hardware_interface
     bool gripper_can_enabled_{false};
     int gripper_last_raw_{-1}; // -1 unknown, 0-255 last sent position
 
-    // std::vector<double> prev_position_commands_;
     std::vector<bool> is_homing_;
-    // IN_1 (home lmt)
-    // std::vector<bool> in1_;
-    // IN_2 (end lmt)
-    // std::vector<bool> in2_;
-
-    // Group related state together (single responsibility)
-    struct JointState
-    {
-      double position;
-      double velocity;
-      double command;
-      bool is_homing;
-      bool limit_switch_in1;
-      bool limit_switch_in2;
-    };
-    std::vector<JointState> _joint_states;
 
     // Helper methods
-    void initializeJointData();
-    // void loadJointParameters();
     void loadHardwareParameters();
-    bool connectToCanInterface();
-    void readInitialPositions();
 
-    bool readJointPosition(size_t joint_index);
     void updateJointVelocity(size_t joint_index, double prev_position, double dt);
-    // bool hasCommandsChanged() const;
-    void sendPositionCommands();
+
+    // Returns -1 when cmd is not finite; otherwise returns 0-255.
+    static int mapGripperPositionToRaw(double cmd, double close_pos, double open_pos);
 
     bool openGripperCanSocket();
     void closeGripperCanSocket();

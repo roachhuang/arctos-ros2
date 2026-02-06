@@ -11,28 +11,20 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)  # For lifecycle components
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
-find_package(PkgConfig REQUIRED)
 find_package(angles REQUIRED)
-
-include_directories(include)
 
 add_library(${PROJECT_NAME} SHARED
   src/arctos_hardware_interface.cpp
   src/mks_servo_driver.cpp
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE
-  include
-  # ${LibSerial_INCLUDE_DIRS}
-  "${SERIAL_INCLUDE_DIRS}"
+target_include_directories(${PROJECT_NAME}
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(${PROJECT_NAME} angles::angles)
-
-# target_link_libraries(${PROJECT_NAME}
-#   # "${LibSerial_LIBRARIES}"
-#   "${SERIAL_LDFLAGS}"
-# )
 
 ament_target_dependencies(${PROJECT_NAME}
   hardware_interface
@@ -74,5 +66,11 @@ ament_export_dependencies(
   rclcpp
   rclcpp_lifecycle
 )
+
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
 
 ament_package()

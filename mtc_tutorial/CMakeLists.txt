@@ -9,6 +9,8 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(moveit_task_constructor_core REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 add_executable(mtc_node src/mtc_node.cpp)
 target_include_directories(mtc_node PUBLIC
@@ -19,6 +21,8 @@ ament_target_dependencies(
   mtc_node
   "moveit_task_constructor_core"
   "rclcpp"
+  "tf2_eigen"
+  "tf2_geometry_msgs"
 )
 
 install(TARGETS mtc_node
@@ -29,5 +33,11 @@ install(DIRECTORY launch
 
 install(DIRECTORY include/
   DESTINATION include/)
+
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
 
 ament_package()

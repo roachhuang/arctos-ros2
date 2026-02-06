@@ -8,20 +8,46 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
+find_package(moveit_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(example_interfaces REQUIRED)
 find_package(arctos_interfaces REQUIRED)
 
 add_executable(test_moveit src/test_moveit.cpp)
-ament_target_dependencies(test_moveit rclcpp moveit_ros_planning_interface)
+ament_target_dependencies(test_moveit
+  rclcpp
+  geometry_msgs
+  moveit_ros_planning_interface
+  moveit_msgs
+  tf2
+  tf2_geometry_msgs
+)
 
 add_executable(commander src/commander_template.cpp)
-ament_target_dependencies(commander rclcpp moveit_ros_planning_interface example_interfaces arctos_interfaces)
+ament_target_dependencies(commander
+  rclcpp
+  geometry_msgs
+  moveit_ros_planning_interface
+  moveit_msgs
+  tf2
+  tf2_geometry_msgs
+  example_interfaces
+  arctos_interfaces
+)
 
 install(TARGETS   
   test_moveit
   commander
   DESTINATION lib/${PROJECT_NAME}
 )
+
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
 
 ament_package()

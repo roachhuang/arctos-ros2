@@ -24,9 +24,24 @@ static const rclcpp::Logger LOGGER = rclcpp::get_logger("ArctosInterface");
 
 namespace arctos_hardware_interface
 {
+    int ArctosHardwareInterface::mapGripperPositionToRaw(double cmd, double close_pos, double open_pos)
+    {
+        double min_v = close_pos;
+        double max_v = open_pos;
+        if (min_v > max_v)
+            std::swap(min_v, max_v);
+
+        if (!std::isfinite(cmd))
+            return -1;
+
+        const double clamped = std::clamp(cmd, min_v, max_v);
+        const double span = max_v - min_v;
+        const int raw = (span > 1e-9) ? static_cast<int>(std::lround((clamped - min_v) * 255.0 / span)) : 0;
+        return std::clamp(raw, 0, 255);
+    }
+
     hardware_interface::CallbackReturn ArctosHardwareInterface::on_init(const hw::HardwareComponentInterfaceParams &params)
     {
-        // can_driver_ = std::make_unique<ServoCanSimple>();
         if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
         {
             return hardware_interface::CallbackReturn::ERROR;
@@ -39,26 +54,14 @@ namespace arctos_hardware_interface
                          info_.joints.size(), DOF);
             return hardware_interface::CallbackReturn::ERROR;
         }
-        // This flag controls the logic in read()
         is_homing_.resize(num_joints_, false);
-        // in1_.resize(num_joints_, false);
-        // in2_.resize(num_joints_, false);
         position_commands_.assign(num_joints_, 0.0);
         velocity_commands_.assign(num_joints_, 0.0);
         position_states_.assign(num_joints_, 0.0);
         velocity_states_.assign(num_joints_, 0.0);
         last_sent_counts_.assign(num_joints_, INT32_MIN);
-        // can_ids_.assign(info_.joints.size(), 0);
-        // gear_ratios_.assign(info_.joints.size(), 0.0);
-        // vel_.assign(info_.joints.size(), 0.0);
-        // acc_.assign(info_.joints.size(), 0.0);
 
-        // Initialize tracking vectors
         last_sent_command_.assign(num_joints_, std::numeric_limits<double>::quiet_NaN());
-        send_accum_ = rclcpp::Duration(0, 0);
-
-        // effort_states_.assign(num_joints_, 0.0);
-        // loadJointParameters();
 
         RCLCPP_INFO(LOGGER,
                     "Initialized with %zu joints", num_joints_);
@@ -97,13 +100,6 @@ namespace arctos_hardware_interface
         max_.assign(DOF, 0.0);
         std::vector<bool> arm_seen(DOF, false);
 
-        // require_homing = std::stoi(info_.hardware_parameters.at("require_homing"));
-
-        // Collect joint names for service initialization
-        // std::vector<std::string> joint_names;
-        // joint_names.reserve(info_.joints.size());
-        // Process joints and their interface. gripper also has a can_id and gear_ratio
-
         try
         {
             can_interface_ = info_.hardware_parameters.at("can_interface");
@@ -119,9 +115,6 @@ namespace arctos_hardware_interface
             {
                 gripper_close_pos_ = std::stod(info_.hardware_parameters.at("gripper_close_position"));
             }
-            //     // vel: 0~3000 in RPM (100), accel: 0~256. in 1000 RPM/s (10)
-            //     vel_ = std::stod(info_.hardware_parameters.at("vel"));
-            //     accel_ = std::stod(info_.hardware_parameters.at("accel"));
         }
         catch (const std::exception &e)
         {
@@ -227,9 +220,6 @@ namespace arctos_hardware_interface
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        // Get the position data
-        // auto initial_counts = can_driver_.getPositions();
-
         // Standard Joints (0-3)
         for (size_t i = 0; i < 4; i++)
         {
@@ -257,33 +247,6 @@ namespace arctos_hardware_interface
         last_sent_counts_[4] = c5;
         last_sent_counts_[5] = c6;
 
-        // CRITICAL: initialize tracking with Actuator Space values
-        // Tracking: DO NOT store motor angles in last_sent_command_ if that vector is joint-space.
-        // Prefer separate last_sent_counts_ for wrist, or store joint-space here:
-        // last_sent_command_[4] = position_commands_[4];
-        // last_sent_command_[5] = position_commands_[5];
-
-        // Start homing procedure for all joints
-        // can_ids_={1};
-        // for (u_int8_t can_id : can_ids_)
-        // {
-        //     can_driver_.home(can_id);
-        // }
-        // for (u_int8_t can_id : can_ids_)
-        // {
-        //     int wait_homing_cnt = 0;
-        //     while (can_driver_.getHomingStatus(can_id) != 0x02) // Homing not complete
-        //     {
-        //         std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        //         if (++wait_homing_cnt > 20)
-        //         {
-        //             RCLCPP_ERROR(LOGGER,
-        //                          "Homing timeout for CAN ID: %d", can_id);
-        //             return CallbackReturn::ERROR;
-        //         }
-        //     }
-        //     can_driver_.setZero(can_id);
-        // }
         RCLCPP_INFO(LOGGER, "Hardware activated. All joint positions synchronized with RViz.");
 
         return CallbackReturn::SUCCESS;
@@ -293,10 +256,6 @@ namespace arctos_hardware_interface
     {
         (void)previous_state;
         RCLCPP_INFO(LOGGER, "Deactivating hardware...");
-        // for (auto can_id : can_ids_)
-        // {
-        //     can_driver_.enableMotor(can_id, false);
-        // }
         can_driver_.deactive();
         closeGripperCanSocket();
         return CallbackReturn::SUCCESS;
@@ -342,7 +301,6 @@ namespace arctos_hardware_interface
                 arm_joint_names_[i],
                 hw::HW_IF_POSITION,
                 &position_commands_[i]);
-            // 新增：接收速度指令
             cmds.emplace_back(arm_joint_names_[i], hw::HW_IF_VELOCITY, &velocity_commands_[i]);
         }
         cmds.emplace_back(
@@ -360,22 +318,15 @@ namespace arctos_hardware_interface
         const double dt = period.seconds();
         auto prev = position_states_;
 
-        // joints 1..4 as you already do
         for (size_t i = 0; i < 4; ++i)
         {
-            // double prev = position_states_[i];
+            int64_t encoder_counts = can_driver_.getPosition(can_ids_[i]);
 
-            int64_t encorder_cnt = can_driver_.getPosition(can_ids_[i]);
-
-            double rad = countsToRadians(encorder_cnt, gear_ratios_[i]);
+            double rad = countsToRadians(encoder_counts, gear_ratios_[i]);
 
             // Normalize continuous joints (X, A, C) to [-π, π]
             rad = (i == 0 || i == 3) ? angles::normalize_angle(rad) : rad;
             position_states_[i] = std::isfinite(rad) ? rad : 0.0;
-
-            // RCLCPP_INFO(LOGGER,
-            //             "Reading state from joint '%s': %.3f rad",
-            //             info_.joints[i].name.c_str(), position_states_[i]);
 
             // Calculate velocity with proper bounds checking
             updateJointVelocity(i, prev[i], dt);
@@ -393,16 +344,12 @@ namespace arctos_hardware_interface
             m6_u -= m6_zero_;
         }
 
+        // Wrist kinematics: convert motor space (m5/m6) into joint space (B/C).
         const double K = 0.5;
         const double B = 0.5 * (m5_u + m6_u) / K;
         const double C = angles::normalize_angle(0.5 * (m5_u - m6_u) / K);
         position_states_[4] = B;
         position_states_[5] = C;
-        // RCLCPP_INFO_THROTTLE(LOGGER, *this->get_clock(), 500,
-        //                      "j5=%.2f deg, j6=%.2f deg, m5_u=%.2f deg, m6_u=%.2f deg, c5=%d c6=%d",
-        //                      angles::to_degrees(B), angles::to_degrees(C), angles::to_degrees(m5_u), angles::to_degrees(m6_u), c5, c6);
-        // optional: no hard clamp here (MoveIt wants truth), but if noise causes bounds errors,
-        // clamp ONLY tiny epsilon, not hard.
         updateJointVelocity(4, prev[4], dt);
         updateJointVelocity(5, prev[5], dt);
 
@@ -445,13 +392,6 @@ namespace arctos_hardware_interface
         u_int16_t rpm = 0;             // suppress unused variable warning
         constexpr double B_EPS = 1e-4; // ~0.0057 deg
 
-        // static rclcpp::Time last_send_time = this->get_clock()->now();
-        // if ((this->get_clock()->now() - last_send_time).seconds() < 0.1)
-        // {
-        //     return hw::return_type::OK;
-        // }
-        // last_send_time = this->get_clock()->now();
-
         for (size_t i = 0; i < 4; ++i)
         {
             double joint_target_rad;
@@ -463,17 +403,9 @@ namespace arctos_hardware_interface
                 continue;
             if (std::abs(safe_cmd - last_sent_command_[i]) > threshold_joint(gear_ratios_[i]))
             {
-                // double dq = abs(safe_cmd - last_sent_command_[i]);
-                // double vel = dq / period.seconds();
-
-                // RCLCPP_DEBUG(LOGGER,
-                //              "Sending command to joint '%s': %.3f rad (current: %.3f)",
-                //              info_.joints[i].name.c_str(), safe_cmd, position_states_[i]);
                 int32_t target_pos = radiansToCounts(safe_cmd, gear_ratios_[i]);
                 planned_vel_rpm = std::abs(velocity_commands_[i] * gear_ratios_[i] * (60.0 / TWO_PI));
                 rpm = std::clamp(planned_vel_rpm, 50.0, 2000.0);
-                // rpm = std::clamp(vel * gear_ratios_[i] * (60.0 / TWO_PI), 50.0, 2000.0);
-                // rpm = vel_[i] * (60 / TWO_PI) * gear_ratios_[i];
                 can_driver_.runPositionAbs(can_ids_[i], rpm, acc_[i], target_pos);
                 // Update tracking
                 last_sent_command_[i] = safe_cmd;
@@ -490,6 +422,7 @@ namespace arctos_hardware_interface
 
         if (!wrist_zero_set_)
             return hw::return_type::OK;
+        // Wrist kinematics: convert desired joint space (B/C) into motor space (m5/m6).
         const double K = 0.5; // diff_gain
         double m5_u_abs = m5_zero_ + K * (B + C);
         double m6_u_abs = m6_zero_ + K * (B - C);
@@ -521,24 +454,12 @@ namespace arctos_hardware_interface
                                  angles::to_degrees(B), angles::to_degrees(C), angles::to_degrees(m5_u_abs), angles::to_degrees(m6_u_abs), c5, c6);
         }
 
-        // ----- other joints (1-4) can stay as you already do -----
-        // (but also use count-based eps similarly)
-
         // ----- gripper (command-only CAN device, no encoder) -----
         if (gripper_can_enabled_)
         {
-            double min_v = gripper_close_pos_;
-            double max_v = gripper_open_pos_;
-            if (min_v > max_v)
-                std::swap(min_v, max_v);
-
-            if (!std::isfinite(gripper_cmd_))
+            const int raw_clamped = mapGripperPositionToRaw(gripper_cmd_, gripper_close_pos_, gripper_open_pos_);
+            if (raw_clamped < 0)
                 return hw::return_type::OK;
-
-            const double clamped = std::clamp(gripper_cmd_, min_v, max_v);
-            const double span = max_v - min_v;
-            const int raw = (span > 1e-9) ? static_cast<int>(std::lround((clamped - min_v) * 255.0 / span)) : 0;
-            const int raw_clamped = std::clamp(raw, 0, 255);
 
             if (raw_clamped != gripper_last_raw_)
             {
