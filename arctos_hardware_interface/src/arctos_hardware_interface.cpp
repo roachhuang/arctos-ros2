@@ -24,6 +24,28 @@ static const rclcpp::Logger LOGGER = rclcpp::get_logger("ArctosInterface");
 
 namespace arctos_hardware_interface
 {
+    double ArctosHardwareInterface::clampRpm(double desired_joint_vel,
+                                             const MotorConfig &motor,
+                                             double default_min_rpm,
+                                             double default_max_rpm)
+    {
+        const double abs_ratio = std::abs(motor.gear_ratio);
+        double min_rpm = default_min_rpm;
+        double max_rpm = default_max_rpm;
+
+        if (motor.min_vel > 0.0 && abs_ratio > 0.0)
+        {
+            min_rpm = std::max(min_rpm, motor.min_vel * abs_ratio * (60.0 / TWO_PI));
+        }
+        if (motor.max_vel > 0.0 && abs_ratio > 0.0)
+        {
+            max_rpm = motor.max_vel * abs_ratio * (60.0 / TWO_PI);
+        }
+
+        const double desired_rpm = std::abs(desired_joint_vel) * abs_ratio * (60.0 / TWO_PI);
+        return std::clamp(desired_rpm, min_rpm, max_rpm);
+    }
+
     int ArctosHardwareInterface::mapGripperPositionToRaw(double cmd, double close_pos, double open_pos)
     {
         double min_v = close_pos;
@@ -54,7 +76,6 @@ namespace arctos_hardware_interface
                          info_.joints.size(), DOF);
             return hardware_interface::CallbackReturn::ERROR;
         }
-        is_homing_.resize(num_joints_, false);
         position_commands_.assign(num_joints_, 0.0);
         velocity_commands_.assign(num_joints_, 0.0);
         position_states_.assign(num_joints_, 0.0);
@@ -92,12 +113,7 @@ namespace arctos_hardware_interface
 
     void ArctosHardwareInterface::loadHardwareParameters()
     {
-        can_ids_.assign(DOF, 0);
-        gear_ratios_.assign(DOF, 0.0);
-        vel_.assign(DOF, 0.0);
-        acc_.assign(DOF, 0.0);
-        min_.assign(DOF, 0.0);
-        max_.assign(DOF, 0.0);
+        motors_.fill({});
         std::vector<bool> arm_seen(DOF, false);
 
         try
@@ -169,10 +185,21 @@ namespace arctos_hardware_interface
                 continue;
             }
             const size_t idx = *idx_opt;
-            can_ids_[idx] = std::stoi(joint.parameters.at("can_id"));
-            gear_ratios_[idx] = std::stod(joint.parameters.at("gear_ratio"));
-            vel_[idx] = std::stod(joint.parameters.at("vel"));
-            acc_[idx] = std::stod(joint.parameters.at("acc"));
+            motors_[idx].name = joint.name;
+            motors_[idx].can_id = static_cast<uint8_t>(std::stoul(joint.parameters.at("can_id")));
+            motors_[idx].gear_ratio = std::stod(joint.parameters.at("gear_ratio"));
+            motors_[idx].vel = std::stod(joint.parameters.at("vel"));
+            motors_[idx].acc = std::stod(joint.parameters.at("acc"));
+            motors_[idx].min_vel = 0.0;
+            if (joint.parameters.count("min_vel") > 0)
+            {
+                motors_[idx].min_vel = std::stod(joint.parameters.at("min_vel"));
+            }
+            motors_[idx].max_vel = motors_[idx].vel;
+            if (joint.parameters.count("max_vel") > 0)
+            {
+                motors_[idx].max_vel = std::stod(joint.parameters.at("max_vel"));
+            }
 
             for (const auto &cmd_interface : joint.command_interfaces)
             {
@@ -180,8 +207,8 @@ namespace arctos_hardware_interface
                 {
                     try
                     {
-                        min_[idx] = std::stod(cmd_interface.parameters.at("min"));
-                        max_[idx] = std::stod(cmd_interface.parameters.at("max"));
+                        motors_[idx].min = std::stod(cmd_interface.parameters.at("min"));
+                        motors_[idx].max = std::stod(cmd_interface.parameters.at("max"));
                     }
                     catch (const std::exception &e)
                     {
@@ -208,34 +235,34 @@ namespace arctos_hardware_interface
         (void)previous_state;
         RCLCPP_INFO(LOGGER, "Activating hardware and enabling motors...");
         // Enable all motors
-        for (u_int8_t can_id : can_ids_)
+        for (const auto &motor : motors_)
         {
-            if (!can_driver_.enableMotor(can_id, true))
+            if (!can_driver_.enableMotor(motor.can_id, true))
             {
                 RCLCPP_ERROR(LOGGER,
-                             "Failed to enable CAN ID: %d)", can_id);
+                             "Failed to enable CAN ID: %d)", motor.can_id);
                 return CallbackReturn::ERROR;
             }
-            RCLCPP_INFO(LOGGER, "Motor enabled for CAN ID: %d", can_id);
+            RCLCPP_INFO(LOGGER, "Motor enabled for CAN ID: %d", motor.can_id);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         // Standard Joints (0-3)
         for (size_t i = 0; i < 4; i++)
         {
-            double rad = countsToRadians(can_driver_.getPosition(can_ids_[i]), gear_ratios_[i]);
+            double rad = countsToRadians(can_driver_.getPosition(motors_[i].can_id), motors_[i].gear_ratio);
             position_states_[i] = rad;
             position_commands_[i] = rad; // Tells MoveIt "Stay where you are"
             last_sent_command_[i] = rad; // Tells the Driver "No movement needed yet"
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        auto c5 = can_driver_.getPosition(can_ids_[4]);
-        auto c6 = can_driver_.getPosition(can_ids_[5]);
+        auto c5 = can_driver_.getPosition(motors_[4].can_id);
+        auto c6 = can_driver_.getPosition(motors_[5].can_id);
 
         // unified motor space (motor6 sign applied here!)
-        double m5_u = countsToRadians(c5, gear_ratios_[4]);
-        double m6_u = countsToRadians(c6, gear_ratios_[5]) * M6_SIGN;
+        double m5_u = countsToRadians(c5, motors_[4].gear_ratio);
+        double m6_u = countsToRadians(c6, motors_[5].gear_ratio) * M6_SIGN;
         m5_zero_ = m5_u;
         m6_zero_ = m6_u;
         wrist_zero_set_ = true;
@@ -320,9 +347,9 @@ namespace arctos_hardware_interface
 
         for (size_t i = 0; i < 4; ++i)
         {
-            int64_t encoder_counts = can_driver_.getPosition(can_ids_[i]);
+            int64_t encoder_counts = can_driver_.getPosition(motors_[i].can_id);
 
-            double rad = countsToRadians(encoder_counts, gear_ratios_[i]);
+            double rad = countsToRadians(encoder_counts, motors_[i].gear_ratio);
 
             // Normalize continuous joints (X, A, C) to [-π, π]
             rad = (i == 0 || i == 3) ? angles::normalize_angle(rad) : rad;
@@ -332,10 +359,10 @@ namespace arctos_hardware_interface
             updateJointVelocity(i, prev[i], dt);
         }
 
-        const int64_t c5 = can_driver_.getPosition(can_ids_[4]);
-        const int64_t c6 = can_driver_.getPosition(can_ids_[5]);
-        double m5_u = countsToRadians(c5, gear_ratios_[4]);
-        double m6_u = countsToRadians(c6, gear_ratios_[5]) * M6_SIGN;
+        const int64_t c5 = can_driver_.getPosition(motors_[4].can_id);
+        const int64_t c6 = can_driver_.getPosition(motors_[5].can_id);
+        double m5_u = countsToRadians(c5, motors_[4].gear_ratio);
+        double m6_u = countsToRadians(c6, motors_[5].gear_ratio) * M6_SIGN;
 
         // zero-relative
         if (wrist_zero_set_)
@@ -388,7 +415,6 @@ namespace arctos_hardware_interface
     hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &, const rclcpp::Duration &period)
     {
         (void)period;
-        double planned_vel_rpm;        // suppress unused variable warning
         u_int16_t rpm = 0;             // suppress unused variable warning
         constexpr double B_EPS = 1e-4; // ~0.0057 deg
 
@@ -397,16 +423,15 @@ namespace arctos_hardware_interface
             double joint_target_rad;
             joint_target_rad = position_commands_[i];
             // Only send command if NOT homing (homing is a special "search" move)
-            double safe_cmd = std::clamp(joint_target_rad, min_[i], max_[i]);
+            double safe_cmd = std::clamp(joint_target_rad, motors_[i].min, motors_[i].max);
             // 2. DATA INTEGRITY: Ensure MoveIt/MTC didn't send a NaN
             if (!std::isfinite(safe_cmd))
                 continue;
-            if (std::abs(safe_cmd - last_sent_command_[i]) > threshold_joint(gear_ratios_[i]))
+            if (std::abs(safe_cmd - last_sent_command_[i]) > threshold_joint(motors_[i].gear_ratio))
             {
-                int32_t target_pos = radiansToCounts(safe_cmd, gear_ratios_[i]);
-                planned_vel_rpm = std::abs(velocity_commands_[i] * gear_ratios_[i] * (60.0 / TWO_PI));
-                rpm = std::clamp(planned_vel_rpm, 50.0, 2000.0);
-                can_driver_.runPositionAbs(can_ids_[i], rpm, acc_[i], target_pos);
+                int32_t target_pos = radiansToCounts(safe_cmd, motors_[i].gear_ratio);
+                rpm = static_cast<u_int16_t>(clampRpm(velocity_commands_[i], motors_[i], 50.0, 2000.0));
+                can_driver_.runPositionAbs(motors_[i].can_id, rpm, motors_[i].acc, target_pos);
                 // Update tracking
                 last_sent_command_[i] = safe_cmd;
             }
@@ -428,23 +453,20 @@ namespace arctos_hardware_interface
         double m6_u_abs = m6_zero_ + K * (B - C);
 
         // ----- convert to counts (must llround, division before cast) -----
-        const double effective_gear_ratio = gear_ratios_[5]; // both joints use same gear ratio
+        const double effective_gear_ratio = motors_[5].gear_ratio; // both joints use same gear ratio
         const int32_t c5 = radiansToCounts(m5_u_abs, effective_gear_ratio);
         const int32_t c6 = radiansToCounts(m6_u_abs * M6_SIGN, effective_gear_ratio); // back to physical
 
         // ----- deadband in COUNTS (prevents spamming) -----
         constexpr int32_t COUNT_EPS = 20; // tune: 5~20 counts
-        rpm = vel_[4] * (60.0 / TWO_PI);  // * effective_gear_ratio;
         if (std::abs(c5 - last_sent_counts_[4]) > COUNT_EPS ||
             std::abs(c6 - last_sent_counts_[5]) > COUNT_EPS)
         {
-            planned_vel_rpm = std::abs(velocity_commands_[4] * gear_ratios_[4] * (60.0 / TWO_PI));
-            rpm = std::clamp(planned_vel_rpm, 50.0, 2000.0);
-            can_driver_.runPositionAbs(can_ids_[4], rpm, acc_[4], c5);
+            rpm = static_cast<u_int16_t>(clampRpm(velocity_commands_[4], motors_[4], 50.0, 2000.0));
+            can_driver_.runPositionAbs(motors_[4].can_id, rpm, motors_[4].acc, c5);
 
-            planned_vel_rpm = std::abs(velocity_commands_[5] * gear_ratios_[5] * (60.0 / TWO_PI));
-            rpm = std::clamp(planned_vel_rpm, 50.0, 2000.0);
-            can_driver_.runPositionAbs(can_ids_[5], rpm, acc_[5], c6);
+            rpm = static_cast<u_int16_t>(clampRpm(velocity_commands_[5], motors_[5], 50.0, 2000.0));
+            can_driver_.runPositionAbs(motors_[5].can_id, rpm, motors_[5].acc, c6);
 
             last_sent_counts_[4] = c5;
             last_sent_counts_[5] = c6;

@@ -11,6 +11,8 @@
 #include "arctos_hardware_interface/mks_servo_driver.hpp"
 
 #include <vector>
+#include <array>
+#include <string>
 #include <cmath>
 #include <cstdint>
 
@@ -86,19 +88,26 @@ namespace arctos_hardware_interface
   private:
     // Core components
     mks_servo_driver::MksServoDriver can_driver_;
-
+    static constexpr size_t DOF = 6;
+    
     // Configuration
     std::size_t num_joints_;
     std::string can_interface_;
     // std::vector<double> last_joint_command_;  // size = DOF (B, C in joint space)
     std::vector<double> last_sent_command_; // size = DOF (only valid for motors)
-    // Joint parameters from URDF
-    std::vector<u_int8_t> can_ids_;
-    std::vector<double> gear_ratios_;
-    std::vector<double> vel_;
-    std::vector<double> acc_;
-    std::vector<double> min_;
-    std::vector<double> max_;
+    struct MotorConfig
+    {
+      std::string name;
+      uint8_t can_id{0};
+      double gear_ratio{0.0};
+      double vel{0.0};
+      double min_vel{0.0};
+      double max_vel{0.0};
+      double acc{0.0};
+      double min{0.0};
+      double max{0.0};
+    };
+    std::array<MotorConfig, DOF> motors_;
     double m5_zero_{0.0};
     double m6_zero_{0.0};
     bool wrist_zero_set_{false};
@@ -106,7 +115,6 @@ namespace arctos_hardware_interface
     std::vector<int32_t> last_sent_counts_;
 
     // Joint state data
-    static constexpr size_t DOF = 6;
     std::vector<std::string> arm_joint_names_{"X_joint", "Y_joint", "Z_joint", "A_joint", "B_joint", "C_joint"};
     std::vector<double> position_states_;
     std::vector<double> velocity_states_;
@@ -122,13 +130,13 @@ namespace arctos_hardware_interface
     bool gripper_can_enabled_{false};
     int gripper_last_raw_{-1}; // -1 unknown, 0-255 last sent position
 
-    std::vector<bool> is_homing_;
 
     // Helper methods
     void loadHardwareParameters();
 
     void updateJointVelocity(size_t joint_index, double prev_position, double dt);
 
+    static double clampRpm(double desired_joint_vel, const MotorConfig &motor, double default_min_rpm, double default_max_rpm);
     // Returns -1 when cmd is not finite; otherwise returns 0-255.
     static int mapGripperPositionToRaw(double cmd, double close_pos, double open_pos);
 
