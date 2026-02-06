@@ -1,7 +1,17 @@
 #include "arctos_hardware_interface/arctos_hardware_interface.hpp"
 #include <algorithm>
-#include <cmath>
 #include <angles/angles.h>
+#include <cmath>
+#include <cstring>
+#include <fcntl.h>
+#include <linux/can.h>
+#include <linux/can/raw.h>
+#include <optional>
+#include <stdexcept>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -22,9 +32,13 @@ namespace arctos_hardware_interface
             return hardware_interface::CallbackReturn::ERROR;
         }
 
-        // Use actual joint count from URDF/robot description instead of hardcoded value
-        // num_joints_ = info_.joints.size();
         num_joints_ = DOF;
+        if (info_.joints.size() < DOF)
+        {
+            RCLCPP_FATAL(LOGGER, "Hardware info has %zu joints; expected at least %zu arm joints.",
+                         info_.joints.size(), DOF);
+            return hardware_interface::CallbackReturn::ERROR;
+        }
         // This flag controls the logic in read()
         is_homing_.resize(num_joints_, false);
         // in1_.resize(num_joints_, false);
@@ -64,18 +78,24 @@ namespace arctos_hardware_interface
                          "Failed to open CAN interface: %s", can_interface_.c_str());
             return CallbackReturn::ERROR;
         }
+        gripper_can_enabled_ = openGripperCanSocket();
+        if (!gripper_can_enabled_)
+        {
+            RCLCPP_WARN(LOGGER, "Gripper CAN socket not available; gripper will be command-only (no CAN output).");
+        }
 
         return CallbackReturn::SUCCESS;
     }
 
     void ArctosHardwareInterface::loadHardwareParameters()
     {
-        can_ids_.clear();
-        gear_ratios_.clear();
-        vel_.clear();
-        acc_.clear();
-        min_.clear();
-        max_.clear();
+        can_ids_.assign(DOF, 0);
+        gear_ratios_.assign(DOF, 0.0);
+        vel_.assign(DOF, 0.0);
+        acc_.assign(DOF, 0.0);
+        min_.assign(DOF, 0.0);
+        max_.assign(DOF, 0.0);
+        std::vector<bool> arm_seen(DOF, false);
 
         // require_homing = std::stoi(info_.hardware_parameters.at("require_homing"));
 
@@ -87,6 +107,18 @@ namespace arctos_hardware_interface
         try
         {
             can_interface_ = info_.hardware_parameters.at("can_interface");
+            if (info_.hardware_parameters.count("gripper_can_id") > 0)
+            {
+                gripper_can_id_ = static_cast<uint16_t>(std::stoul(info_.hardware_parameters.at("gripper_can_id")));
+            }
+            if (info_.hardware_parameters.count("gripper_open_position") > 0)
+            {
+                gripper_open_pos_ = std::stod(info_.hardware_parameters.at("gripper_open_position"));
+            }
+            if (info_.hardware_parameters.count("gripper_close_position") > 0)
+            {
+                gripper_close_pos_ = std::stod(info_.hardware_parameters.at("gripper_close_position"));
+            }
             //     // vel: 0~3000 in RPM (100), accel: 0~256. in 1000 RPM/s (10)
             //     vel_ = std::stod(info_.hardware_parameters.at("vel"));
             //     accel_ = std::stod(info_.hardware_parameters.at("accel"));
@@ -97,28 +129,83 @@ namespace arctos_hardware_interface
             throw;
         }
 
+        auto arm_index = [this](const std::string &name) -> std::optional<size_t>
+        {
+            for (size_t i = 0; i < arm_joint_names_.size(); ++i)
+            {
+                if (arm_joint_names_[i] == name)
+                    return i;
+            }
+            return std::nullopt;
+        };
+
         for (const auto &joint : info_.joints)
         {
-            // joint_names.push_back(joint.name);
-            can_ids_.push_back(std::stoi(joint.parameters.at("can_id")));
-            gear_ratios_.push_back(std::stod(joint.parameters.at("gear_ratio")));
-            // rad per second
-            vel_.push_back(std::stod(joint.parameters.at("vel")));
-            acc_.push_back(std::stod(joint.parameters.at("acc")));
+            if (joint.name == "Right_jaw_joint")
+            {
+                if (joint.parameters.count("can_id") > 0)
+                {
+                    gripper_can_id_ = static_cast<uint16_t>(std::stoul(joint.parameters.at("can_id")));
+                }
+                for (const auto &cmd_interface : joint.command_interfaces)
+                {
+                    if (cmd_interface.name == "position")
+                    {
+                        try
+                        {
+                            double min_v = std::stod(cmd_interface.parameters.at("min"));
+                            double max_v = std::stod(cmd_interface.parameters.at("max"));
+                            if (min_v > max_v)
+                                std::swap(min_v, max_v);
+                            gripper_close_pos_ = min_v;
+                            gripper_open_pos_ = max_v;
+                        }
+                        catch (const std::exception &e)
+                        {
+                            RCLCPP_WARN(LOGGER, "Gripper min/max not set from joint params: %s", e.what());
+                        }
+                    }
+                }
+                continue;
+            }
+
+            auto idx_opt = arm_index(joint.name);
+            if (!idx_opt)
+            {
+                RCLCPP_WARN(LOGGER, "Unknown joint in hardware info: %s (skipping)", joint.name.c_str());
+                continue;
+            }
+            const size_t idx = *idx_opt;
+            can_ids_[idx] = std::stoi(joint.parameters.at("can_id"));
+            gear_ratios_[idx] = std::stod(joint.parameters.at("gear_ratio"));
+            vel_[idx] = std::stod(joint.parameters.at("vel"));
+            acc_[idx] = std::stod(joint.parameters.at("acc"));
 
             for (const auto &cmd_interface : joint.command_interfaces)
             {
                 if (cmd_interface.name == "position")
+                {
                     try
                     {
-                        min_.push_back(std::stod(cmd_interface.parameters.at("min")));
-                        max_.push_back(std::stod(cmd_interface.parameters.at("max")));
+                        min_[idx] = std::stod(cmd_interface.parameters.at("min"));
+                        max_[idx] = std::stod(cmd_interface.parameters.at("max"));
                     }
                     catch (const std::exception &e)
                     {
                         RCLCPP_FATAL(LOGGER, "Missing min/max parameters for joint %s: %s", joint.name.c_str(), e.what());
                         throw;
                     }
+                }
+            }
+            arm_seen[idx] = true;
+        }
+
+        for (size_t i = 0; i < arm_seen.size(); ++i)
+        {
+            if (!arm_seen[i])
+            {
+                RCLCPP_FATAL(LOGGER, "Missing arm joint parameters for %s", arm_joint_names_[i].c_str());
+                throw std::runtime_error("Missing arm joint parameters");
             }
         }
     }
@@ -162,12 +249,6 @@ namespace arctos_hardware_interface
         m5_zero_ = m5_u;
         m6_zero_ = m6_u;
         wrist_zero_set_ = true;
-
-        // Joint-space from unified motor space
-        // position_states_[4] = 0.5 * (m5_u + m6_u); // Pitch
-        // position_states_[5] = angles::normalize_angle(0.5 * (m5_u - m6_u));
-        // position_commands_[4] = position_states_[4];
-        // position_commands_[5] = position_states_[5];
 
         position_states_[4] = position_states_[5] = 0;
         position_commands_[4] = position_commands_[5] = 0;
@@ -217,6 +298,7 @@ namespace arctos_hardware_interface
         //     can_driver_.enableMotor(can_id, false);
         // }
         can_driver_.deactive();
+        closeGripperCanSocket();
         return CallbackReturn::SUCCESS;
     }
 
@@ -227,12 +309,12 @@ namespace arctos_hardware_interface
         for (size_t i = 0; i < num_joints_; ++i)
         {
             state_interfaces.emplace_back(
-                info_.joints[i].name,
+                arm_joint_names_[i],
                 hw::HW_IF_POSITION,
                 &position_states_[i]);
 
             state_interfaces.emplace_back(
-                info_.joints[i].name,
+                arm_joint_names_[i],
                 hw::HW_IF_VELOCITY,
                 &velocity_states_[i]);
         }
@@ -257,11 +339,11 @@ namespace arctos_hardware_interface
         for (size_t i = 0; i < num_joints_; ++i)
         {
             cmds.emplace_back(
-                info_.joints[i].name,
+                arm_joint_names_[i],
                 hw::HW_IF_POSITION,
                 &position_commands_[i]);
             // 新增：接收速度指令
-            cmds.emplace_back(info_.joints[i].name, hw::HW_IF_VELOCITY, &velocity_commands_[i]);
+            cmds.emplace_back(arm_joint_names_[i], hw::HW_IF_VELOCITY, &velocity_commands_[i]);
         }
         cmds.emplace_back(
             "Right_jaw_joint",
@@ -316,13 +398,17 @@ namespace arctos_hardware_interface
         const double C = angles::normalize_angle(0.5 * (m5_u - m6_u) / K);
         position_states_[4] = B;
         position_states_[5] = C;
-        RCLCPP_INFO_THROTTLE(LOGGER, *this->get_clock(), 500,
-                             "j5=%.2f deg, j6=%.2f deg, m5_u=%.2f deg, m6_u=%.2f deg, c5=%d c6=%d",
-                             angles::to_degrees(B), angles::to_degrees(C), angles::to_degrees(m5_u), angles::to_degrees(m6_u), c5, c6);
+        // RCLCPP_INFO_THROTTLE(LOGGER, *this->get_clock(), 500,
+        //                      "j5=%.2f deg, j6=%.2f deg, m5_u=%.2f deg, m6_u=%.2f deg, c5=%d c6=%d",
+        //                      angles::to_degrees(B), angles::to_degrees(C), angles::to_degrees(m5_u), angles::to_degrees(m6_u), c5, c6);
         // optional: no hard clamp here (MoveIt wants truth), but if noise causes bounds errors,
         // clamp ONLY tiny epsilon, not hard.
         updateJointVelocity(4, prev[4], dt);
         updateJointVelocity(5, prev[5], dt);
+
+        // Gripper has no encoder: keep soft state synced to command
+        gripper_pos_ = gripper_cmd_;
+        gripper_vel_ = 0.0;
 
         return hw::return_type::OK;
     }
@@ -438,7 +524,96 @@ namespace arctos_hardware_interface
         // ----- other joints (1-4) can stay as you already do -----
         // (but also use count-based eps similarly)
 
+        // ----- gripper (command-only CAN device, no encoder) -----
+        if (gripper_can_enabled_)
+        {
+            double min_v = gripper_close_pos_;
+            double max_v = gripper_open_pos_;
+            if (min_v > max_v)
+                std::swap(min_v, max_v);
+
+            if (!std::isfinite(gripper_cmd_))
+                return hw::return_type::OK;
+
+            const double clamped = std::clamp(gripper_cmd_, min_v, max_v);
+            const double span = max_v - min_v;
+            const int raw = (span > 1e-9) ? static_cast<int>(std::lround((clamped - min_v) * 255.0 / span)) : 0;
+            const int raw_clamped = std::clamp(raw, 0, 255);
+
+            if (raw_clamped != gripper_last_raw_)
+            {
+                const std::vector<uint8_t> data{static_cast<uint8_t>(raw_clamped)};
+                if (sendGripperFrame(data))
+                {
+                    gripper_last_raw_ = raw_clamped;
+                }
+                else
+                {
+                    RCLCPP_WARN(LOGGER, "Failed to send gripper CAN command.");
+                }
+            }
+        }
+
         return hw::return_type::OK;
+    }
+
+    bool ArctosHardwareInterface::openGripperCanSocket()
+    {
+        if (can_interface_.empty())
+        {
+            return false;
+        }
+        gripper_sock_ = socket(PF_CAN, SOCK_RAW, CAN_RAW);
+        if (gripper_sock_ < 0)
+        {
+            return false;
+        }
+        struct ifreq ifr{};
+        std::strncpy(ifr.ifr_name, can_interface_.c_str(), IFNAMSIZ - 1);
+        if (ioctl(gripper_sock_, SIOCGIFINDEX, &ifr) < 0)
+        {
+            close(gripper_sock_);
+            gripper_sock_ = -1;
+            return false;
+        }
+        struct sockaddr_can addr{};
+        addr.can_family = AF_CAN;
+        addr.can_ifindex = ifr.ifr_ifindex;
+        if (bind(gripper_sock_, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+        {
+            close(gripper_sock_);
+            gripper_sock_ = -1;
+            return false;
+        }
+        int flags = fcntl(gripper_sock_, F_GETFL, 0);
+        fcntl(gripper_sock_, F_SETFL, flags | O_NONBLOCK);
+        return true;
+    }
+
+    void ArctosHardwareInterface::closeGripperCanSocket()
+    {
+        if (gripper_sock_ >= 0)
+        {
+            close(gripper_sock_);
+            gripper_sock_ = -1;
+        }
+    }
+
+    bool ArctosHardwareInterface::sendGripperFrame(const std::vector<uint8_t> &data)
+    {
+        if (gripper_sock_ < 0)
+        {
+            return false;
+        }
+        if (data.size() > 8)
+        {
+            return false;
+        }
+        can_frame tx{};
+        tx.can_id = gripper_can_id_ & CAN_SFF_MASK;
+        tx.can_dlc = static_cast<__u8>(data.size());
+        std::memcpy(tx.data, data.data(), tx.can_dlc);
+        return ::write(gripper_sock_, &tx, sizeof(tx)) == sizeof(tx);
     }
 
 } // namespace arctos_hardware_interface

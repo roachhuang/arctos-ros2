@@ -11,6 +11,7 @@
 #include <thread>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 
 namespace hw = hardware_interface;
 
@@ -113,6 +114,12 @@ namespace arctos_hardware_interface
     double gripper_cmd_ = 0.0;
     double gripper_vel_ = 0.0;
     double gripper_pos_ = 0.0;
+    uint16_t gripper_can_id_{7};
+    double gripper_open_pos_{0.019};
+    double gripper_close_pos_{-0.010};
+    int gripper_sock_{-1};
+    bool gripper_can_enabled_{false};
+    int gripper_last_raw_{-1}; // -1 unknown, 0-255 last sent position
 
     // std::vector<double> prev_position_commands_;
     std::vector<bool> is_homing_;
@@ -144,6 +151,10 @@ namespace arctos_hardware_interface
     void updateJointVelocity(size_t joint_index, double prev_position, double dt);
     // bool hasCommandsChanged() const;
     void sendPositionCommands();
+
+    bool openGripperCanSocket();
+    void closeGripperCanSocket();
+    bool sendGripperFrame(const std::vector<uint8_t> &data);
   };
 
 } // namespace arctos_hardware_interface

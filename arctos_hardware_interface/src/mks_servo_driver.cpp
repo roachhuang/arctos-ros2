@@ -185,6 +185,7 @@ namespace mks_servo_driver
     {
         sendCmd(can_id, CANCommands::GO_HOME, {});
     }
+    
 
     uint8_t MksServoDriver::sendCmdSync(uint16_t id, uint8_t cmd, const std::vector<uint8_t> &params, int timeout_ms, bool use_homing_status)
     {

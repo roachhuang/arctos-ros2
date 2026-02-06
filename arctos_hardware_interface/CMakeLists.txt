@@ -43,8 +43,15 @@ ament_target_dependencies(${PROJECT_NAME}
 
 pluginlib_export_plugin_description_file(hardware_interface arctos_hardware_interface.xml)
 
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/config")
+  install(
+    DIRECTORY config
+    DESTINATION share/${PROJECT_NAME}
+  )
+endif()
+
 install(
-  DIRECTORY config launch
+  DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
 
