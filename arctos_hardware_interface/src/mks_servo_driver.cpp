@@ -297,18 +297,20 @@ namespace mks_servo_driver
     void MksServoDriver::pollLoop()
     {
         int tick = 0;
+        constexpr int kTickMs = 5;
+        constexpr int kPollTicks50Hz = 20 / kTickMs; // 4
         while (running_)
         {
-            // poll 1~4 at 10-20Hz.
-            if ((tick % 10) == 0)
+            // poll 1~4 at ~50 Hz
+            if ((tick % kPollTicks50Hz) == 0)
             {
                 for (size_t id = 1; id <= 4; id++)
                 {
                     queryPosition(id);
                 }
             }  
-            // poll 5/6 at 50–100 Hz         
-            if ((tick % 2) == 0)
+            // poll 5/6 at ~50 Hz
+            if ((tick % kPollTicks50Hz) == 0)
             {
                 queryPosition(5);
                 queryPosition(6);
@@ -321,7 +323,7 @@ namespace mks_servo_driver
             }
 
             ++tick;
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            std::this_thread::sleep_for(std::chrono::milliseconds(kTickMs));
         }
     }
 

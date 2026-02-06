@@ -1,6 +1,6 @@
 controller_manager:
   ros__parameters:
-    update_rate: 10 # Hz
+    update_rate: 50 # Hz
     use_sim_time: false
 
     arm_controller:
@@ -30,7 +30,8 @@ arm_controller:
       # - velocity
       # - effort
 
-    action_monitor_rate: 20.0
+    state_publish_rate: 50.0
+    action_monitor_rate: 50.0
 
     allow_partial_joints_goal: false
     interpolate_from_desired_state: true
@@ -44,3 +45,5 @@ arm_controller:
 gripper_controller:
   ros__parameters:
     joint: Left_jaw_joint
+    state_publish_rate: 50.0
+    action_monitor_rate: 50.0
