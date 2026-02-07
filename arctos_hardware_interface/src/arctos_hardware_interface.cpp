@@ -48,17 +48,17 @@ namespace arctos_hardware_interface
 
     int ArctosHardwareInterface::mapGripperPositionToRaw(double cmd, double close_pos, double open_pos)
     {
-        double min_v = close_pos;
-        double max_v = open_pos;
-        if (min_v > max_v)
-            std::swap(min_v, max_v);
-
         if (!std::isfinite(cmd))
             return -1;
 
+        const double min_v = std::min(close_pos, open_pos);
+        const double max_v = std::max(close_pos, open_pos);
         const double clamped = std::clamp(cmd, min_v, max_v);
-        const double span = max_v - min_v;
-        const int raw = (span > 1e-9) ? static_cast<int>(std::lround((clamped - min_v) * 255.0 / span)) : 0;
+        const double span = open_pos - close_pos;
+        if (std::abs(span) <= 1e-9)
+            return 0;
+
+        int raw = static_cast<int>(std::lround((clamped - close_pos) * 255.0 / span));
         return std::clamp(raw, 0, 255);
     }
 
@@ -115,6 +115,7 @@ namespace arctos_hardware_interface
     {
         motors_.fill({});
         std::vector<bool> arm_seen(DOF, false);
+        bool gripper_limits_from_hw = false;
 
         try
         {
@@ -126,10 +127,12 @@ namespace arctos_hardware_interface
             if (info_.hardware_parameters.count("gripper_open_position") > 0)
             {
                 gripper_open_pos_ = std::stod(info_.hardware_parameters.at("gripper_open_position"));
+                gripper_limits_from_hw = true;
             }
             if (info_.hardware_parameters.count("gripper_close_position") > 0)
             {
                 gripper_close_pos_ = std::stod(info_.hardware_parameters.at("gripper_close_position"));
+                gripper_limits_from_hw = true;
             }
         }
         catch (const std::exception &e)
@@ -160,18 +163,21 @@ namespace arctos_hardware_interface
                 {
                     if (cmd_interface.name == "position")
                     {
-                        try
+                        if (!gripper_limits_from_hw)
                         {
-                            double min_v = std::stod(cmd_interface.parameters.at("min"));
-                            double max_v = std::stod(cmd_interface.parameters.at("max"));
-                            if (min_v > max_v)
-                                std::swap(min_v, max_v);
-                            gripper_close_pos_ = min_v;
-                            gripper_open_pos_ = max_v;
-                        }
-                        catch (const std::exception &e)
-                        {
-                            RCLCPP_WARN(LOGGER, "Gripper min/max not set from joint params: %s", e.what());
+                            try
+                            {
+                                double min_v = std::stod(cmd_interface.parameters.at("min"));
+                                double max_v = std::stod(cmd_interface.parameters.at("max"));
+                                if (min_v > max_v)
+                                    std::swap(min_v, max_v);
+                                gripper_close_pos_ = min_v;
+                                gripper_open_pos_ = max_v;
+                            }
+                            catch (const std::exception &e)
+                            {
+                                RCLCPP_WARN(LOGGER, "Gripper min/max not set from joint params: %s", e.what());
+                            }
                         }
                     }
                 }
@@ -479,9 +485,10 @@ namespace arctos_hardware_interface
         // ----- gripper (command-only CAN device, no encoder) -----
         if (gripper_can_enabled_)
         {
-            const int raw_clamped = mapGripperPositionToRaw(gripper_cmd_, gripper_close_pos_, gripper_open_pos_);
+            int raw_clamped = mapGripperPositionToRaw(gripper_cmd_, gripper_close_pos_, gripper_open_pos_);
             if (raw_clamped < 0)
                 return hw::return_type::OK;
+            raw_clamped = 255 - raw_clamped; // invert to match MoveIt goal state
 
             if (raw_clamped != gripper_last_raw_)
             {

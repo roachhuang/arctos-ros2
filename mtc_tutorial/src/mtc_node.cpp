@@ -130,6 +130,9 @@ mtc::Task MTCTaskNode::createTask()
     auto stage_open_hand =
         std::make_unique<mtc::stages::MoveTo>("open hand", interpolation_planner);
     stage_open_hand->setGroup(hand_group_name);
+    // Slow down gripper motion for smooth open
+    stage_open_hand->setProperty("max_velocity_scaling_factor", 0.05);
+    stage_open_hand->setProperty("max_acceleration_scaling_factor", 0.05);
 
     // Explicitly tell MTC which hardware controller to use
     moveit::task_constructor::TrajectoryExecutionInfo exec_info;
@@ -272,6 +275,9 @@ mtc::Task MTCTaskNode::createTask()
       stage->properties().set("trajectory_execution_info", exec_info);
 
       stage->setGroup(hand_group_name);
+      // Slow down gripper motion for smooth close
+      stage->setProperty("max_velocity_scaling_factor", 0.05);
+      stage->setProperty("max_acceleration_scaling_factor", 0.05);
       stage->setGoal("close");
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
       grasp->insert(std::move(stage));
@@ -347,10 +353,10 @@ mtc::Task MTCTaskNode::createTask()
       target_pose_msg.pose.position.x = PLACE_OFFSET_X;
       target_pose_msg.pose.position.y = PLACE_OFFSET_Y;
 
-      // Correct quaternion for 180° rotation around X-axis
-      // tf2::Quaternion q;
-      // q.setRotation(tf2::Vector3(1, 0, 0), M_PI);
-      // target_pose_msg.pose.orientation = tf2::toMsg(q);
+      // Correct quaternion for 180° (flip) rotation around X-axis
+      tf2::Quaternion q;
+      q.setRotation(tf2::Vector3(1, 0, 0), M_PI);
+      target_pose_msg.pose.orientation = tf2::toMsg(q);
 
       stage->setPose(target_pose_msg);
       stage->setMonitoredStage(attach_object_stage);
@@ -376,6 +382,9 @@ mtc::Task MTCTaskNode::createTask()
       stage->properties().set("trajectory_execution_info", exec_info);
 
       stage->setGroup(hand_group_name);
+      // Slow down gripper motion for smooth open
+      stage->setProperty("max_velocity_scaling_factor", 0.05);
+      stage->setProperty("max_acceleration_scaling_factor", 0.05);
       stage->setGoal("open");
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
       place->insert(std::move(stage));
