@@ -83,7 +83,8 @@ def generate_launch_description():
             os.path.join(
                 get_package_share_directory("arctos_moveit_config"),
                 "launch",
-                "move_group.launch.py",
+                "perception_stack.launch.py",
+                # "move_group.launch.py",
             )
         ),
         # launch_arguments={
