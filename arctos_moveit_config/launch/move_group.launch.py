@@ -15,6 +15,11 @@ def generate_launch_description():
         .joint_limits(file_path="config/joint_limits.yaml")
         .robot_description_semantic(file_path="config/arctos.srdf")
         .robot_description_kinematics(file_path="config/kinematics.yaml")
+        .planning_pipelines(
+            default_planning_pipeline="ompl",
+            pipelines=["ompl", "pilz_industrial_motion_planner"],
+        )
+        .pilz_cartesian_limits(file_path="config/pilz_cartesian_limits.yaml")
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
         .planning_scene_monitor()
         .to_moveit_configs()
