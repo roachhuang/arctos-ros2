@@ -57,12 +57,12 @@ def generate_launch_description():
     )
 
     # Publish robot TFs so MoveIt can transform sensor data into the planning frame
-    robot_state_publisher_node = Node(
-        package="robot_state_publisher",
-        executable="robot_state_publisher",
-        output="screen",
-        parameters=[moveit_config.robot_description],
-    )
+    # robot_state_publisher_node = Node(
+    #     package="robot_state_publisher",
+    #     executable="robot_state_publisher",
+    #     output="screen",
+    #     parameters=[moveit_config.robot_description],
+    # )
 
     # Static TF between robot base and Kinect (test values)
     static_tf_node = Node(
@@ -78,7 +78,7 @@ def generate_launch_description():
             static_tf_qz,
             static_tf_qw,
             "base_link",
-            "kinect_depth",
+            "kinect_rgb",
         ],
     )
 

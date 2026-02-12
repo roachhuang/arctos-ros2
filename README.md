@@ -45,6 +45,8 @@ sudo apt-get update && sudo apt-get install -y \
     ros-jazzy-moveit-kinematics
 ```
 
+sudo apt-get update sudo apt-get install -y ros-jazzy-moveit-ros-visualization
+
 ## Installation
 
 ### 1. Environment Setup
@@ -93,7 +95,10 @@ ros2 launch urdf_tutorial display.launch.py model:=/home/roach/ros2_ws/src/arcto
 
 ```bash
 cd ~/ros2_ws
-colcon build --symlink-install
+  colcon build --symlink-install
+or 
+  colcon build --mixin release (for moveit pkg)
+
 source install/setup.bash
 ```
 

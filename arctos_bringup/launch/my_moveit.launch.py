@@ -1,10 +1,13 @@
 import os
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch_ros.actions import Node
-from launch.substitutions import Command, PathJoinSubstitution
-from launch_ros.substitutions import FindPackageShare
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
+
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+
 from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
@@ -77,6 +80,9 @@ def generate_launch_description():
         arguments=["gripper_controller", "--controller-manager-timeout", "60"],
     )
 
+    use_rviz = LaunchConfiguration("use_rviz")
+    use_kinect = LaunchConfiguration("use_kinect")
+
     # --- MoveIt (NO URDF INJECTION) ---
     move_group = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -87,6 +93,10 @@ def generate_launch_description():
                 # "move_group.launch.py",
             )
         ),
+        launch_arguments={
+            "use_rviz": use_rviz,
+            "use_kinect": use_kinect,
+        }.items(),
         # launch_arguments={
         #     # Critical: prevent MoveIt from redefining URDF
         #     "publish_robot_description": "false",
@@ -103,6 +113,8 @@ def generate_launch_description():
     # )
 
     return LaunchDescription([
+        DeclareLaunchArgument("use_rviz", default_value="true"),
+        DeclareLaunchArgument("use_kinect", default_value="true"),
         robot_state_publisher,
         static_tf,
         ros2_control_node,
