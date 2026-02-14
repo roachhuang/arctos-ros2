@@ -4,9 +4,11 @@ sensors:
 kinect_pointcloud:
   sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
   point_cloud_topic: /kinect/points
-  max_range: 5.0
+  # Diagnostic profile: keep more points to verify octomap pipeline behavior.
+  max_range: 3.0
   point_subsample: 1
-  padding_offset: 0.1
-  padding_scale: 1.0
-  max_update_rate: 1.0
+  # Disable self-filter padding temporarily; if voxels appear, extrinsic/masking is the issue.
+  padding_offset: 0.0
+  padding_scale: 0.0
+  max_update_rate: 5.0
   filtered_cloud_topic: /moveit/filtered_cloud

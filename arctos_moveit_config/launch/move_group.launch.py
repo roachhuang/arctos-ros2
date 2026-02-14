@@ -1,10 +1,11 @@
+import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from moveit_configs_utils import MoveItConfigsBuilder
-import os
+
 from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
@@ -30,15 +31,14 @@ def generate_launch_description():
     # common_params = [moveit_config.to_dict()]
 
     # Launch arguments
-    static_tf_x = LaunchConfiguration("static_tf_x")
-    static_tf_y = LaunchConfiguration("static_tf_y")
-    static_tf_z = LaunchConfiguration("static_tf_z")
-    static_tf_qx = LaunchConfiguration("static_tf_qx")
-    static_tf_qy = LaunchConfiguration("static_tf_qy")
-    static_tf_qz = LaunchConfiguration("static_tf_qz")
-    static_tf_qw = LaunchConfiguration("static_tf_qw")
+    # static_tf_x = LaunchConfiguration("static_tf_x")
+    # static_tf_y = LaunchConfiguration("static_tf_y")
+    # static_tf_z = LaunchConfiguration("static_tf_z")
+    # static_tf_qx = LaunchConfiguration("static_tf_qx")
+    # static_tf_qy = LaunchConfiguration("static_tf_qy")
+    # static_tf_qz = LaunchConfiguration("static_tf_qz")
+    # static_tf_qw = LaunchConfiguration("static_tf_qw")
     use_rviz = LaunchConfiguration("use_rviz")
-
     # 3. 定義 move_group 節點
     move_group_node = Node(
         package="moveit_ros_move_group",
@@ -50,6 +50,13 @@ def generate_launch_description():
             {"capabilities": "move_group/ExecuteTaskSolutionCapability"},
             {"use_sim_time": False},
             {"monitor_dynamics": False},
+            # Ensure occupancy map uses a stable planning frame and nonzero voxel resolution.
+            {"octomap_frame": "base_link"},
+            {"octomap_resolution": 0.03},
+            # Keep scene updates flowing to RViz/clients.
+            {"publish_geometry_updates": True},
+            {"publish_state_updates": True},
+            {"publish_transforms_updates": True},
             # Force periodic planning scene publication so /planning_scene isn't empty
             {"publish_planning_scene": True},
             {"publish_planning_scene_hz": 1.0},
@@ -65,22 +72,22 @@ def generate_launch_description():
     # )
 
     # Static TF between robot base and Kinect (test values)
-    static_tf_node = Node(
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        output="screen",
-        arguments=[
-            static_tf_x,
-            static_tf_y,
-            static_tf_z,
-            static_tf_qx,
-            static_tf_qy,
-            static_tf_qz,
-            static_tf_qw,
-            "base_link",
-            "kinect_rgb",
-        ],
-    )
+    # static_tf_node = Node(
+    #     package="tf2_ros",
+    #     executable="static_transform_publisher",
+    #     output="screen",
+    #     arguments=[
+    #         static_tf_x,
+    #         static_tf_y,
+    #         static_tf_z,
+    #         static_tf_qx,
+    #         static_tf_qy,
+    #         static_tf_qz,
+    #         static_tf_qw,
+    #         "base_link",
+    #         "kinect_rgb",
+    #     ],
+    # )
 
     # 4. 🔴 修正：定義 RViz 節點並傳入同樣的參數
     rviz_config_file = os.path.join(
@@ -100,16 +107,16 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument("static_tf_x", default_value="0.5"),
-        DeclareLaunchArgument("static_tf_y", default_value="0.0"),
-        DeclareLaunchArgument("static_tf_z", default_value="0.6"),
-        DeclareLaunchArgument("static_tf_qx", default_value="0.0"),
-        DeclareLaunchArgument("static_tf_qy", default_value="0.0"),
-        DeclareLaunchArgument("static_tf_qz", default_value="0.0"),
-        DeclareLaunchArgument("static_tf_qw", default_value="1.0"),
+        # DeclareLaunchArgument("static_tf_x", default_value="0.5"),
+        # DeclareLaunchArgument("static_tf_y", default_value="0.0"),
+        # DeclareLaunchArgument("static_tf_z", default_value="0.6"),
+        # DeclareLaunchArgument("static_tf_qx", default_value="0.0"),
+        # DeclareLaunchArgument("static_tf_qy", default_value="0.0"),
+        # DeclareLaunchArgument("static_tf_qz", default_value="0.0"),
+        # DeclareLaunchArgument("static_tf_qw", default_value="1.0"),
         DeclareLaunchArgument("use_rviz", default_value="true"),
         # robot_state_publisher_node,
-        static_tf_node,
+        # static_tf_node,
         move_group_node,
         rviz_node,
     ])

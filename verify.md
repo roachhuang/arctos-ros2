@@ -1,3 +1,91 @@
+## Arctos Calibration + Perception Verification (Current Setup)
+
+Use this checklist after updating `arctos_bringup/launch/camera_pose.launch.py`.
+
+### 1. Launch one stack only
+
+Hardware mode:
+```bash
+ros2 launch arctos_bringup my_moveit.launch.py \
+  use_ros2_control:=true \
+  use_fake_joint_states:=false \
+  use_kinect:=true use_rviz:=true
+```
+
+Perception-only mode (no CAN/controller manager dependency):
+```bash
+ros2 launch arctos_bringup my_moveit.launch.py \
+  use_ros2_control:=false \
+  use_fake_joint_states:=true \
+  use_kinect:=true use_rviz:=true
+```
+
+### 2. TF checks (must pass first)
+
+```bash
+ros2 run tf2_ros tf2_echo world base_link
+ros2 run tf2_ros tf2_echo base_link kinect_rgb
+ros2 run tf2_ros tf2_echo base_link kinect_depth
+```
+
+Pass:
+- All transforms resolve after startup.
+- `time 0.0` is normal for static TF.
+
+### 3. Topic health checks
+
+```bash
+ros2 topic hz /kinect/points
+ros2 topic info /moveit/filtered_cloud -v
+ros2 topic hz /moveit/filtered_cloud
+ros2 topic hz /joint_states
+```
+
+Pass:
+- `/kinect/points` has stable nonzero rate.
+- `/moveit/filtered_cloud` has one expected type and nonzero rate.
+- `/joint_states` is present (real controllers or fake joint states).
+
+### 4. Planning scene / octomap checks
+
+Clear map once after startup:
+```bash
+ros2 service call /clear_octomap std_srvs/srv/Empty {}
+```
+
+In RViz:
+- MotionPlanning -> Planning Scene -> Scene Geometry
+- `Show Scene Geometry = true`
+- `Voxel Rendering = Occupied Voxels`
+
+Functional pass:
+- Put an object in camera view and workspace.
+- Occupied voxels appear in 3D planning scene.
+- Plan through object: planner detours or fails.
+- Remove object and replan: planning improves/succeeds.
+
+### 5. Hand-eye validation (post-calibration acceptance)
+
+1. Re-run MoveIt hand-eye with 10-15 new poses (hold-out set).
+2. Compare new `base_link -> kinect_rgb` to saved transform.
+3. Run task-space probe (robot TCP to known visual target).
+
+Target acceptance:
+- Repeatability drift: few mm, ~1-2 deg.
+- Task-space error within your application tolerance (e.g. <= 10 mm for coarse pick/place).
+
+### 6. Quick failure signatures
+
+- `PlanningScene - requesting initial scene failed`:
+  Check `/move_group` exists and planning-scene services are available.
+- `Missing transform for shape mesh` in `move_group` logs:
+  Robot link TF is incomplete; ensure `joint_states` are published.
+- `/moveit/filtered_cloud` shows no rate:
+  Point-cloud updater not active or TF/filtering is dropping points.
+
+---
+## Legacy Notes (Kept As-Is)
+
 nmap -sP 192.168.1.0/24 | awk '/^Nmap/{ip=$NF}/B8:27:EB/{print ip}
 # On Pi, improve WiFi stability
 sudo nano /etc/dhcpcd.conf
