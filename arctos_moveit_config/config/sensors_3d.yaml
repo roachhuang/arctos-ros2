@@ -4,11 +4,13 @@ sensors:
 kinect_pointcloud:
   sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
   point_cloud_topic: /kinect/points
-  # Diagnostic profile: keep more points to verify octomap pipeline behavior.
-  max_range: 3.0
-  point_subsample: 1
-  # Disable self-filter padding temporarily; if voxels appear, extrinsic/masking is the issue.
-  padding_offset: 0.0
-  padding_scale: 0.0
-  max_update_rate: 5.0
+  # Kinect v1 balanced profile:
+  # keep arm workspace coverage while limiting depth noise/background clutter.
+  max_range: 1.3
+  point_subsample: 3
+  # Robot self-filter padding (slightly increased for Kinect v1 depth jitter).
+  padding_offset: 0.04
+  padding_scale: 1.0
+  # Kinect v1 point cloud is typically ~10-15 Hz; 2 Hz is stable for MoveIt octomap.
+  max_update_rate: 2.0
   filtered_cloud_topic: /moveit/filtered_cloud
