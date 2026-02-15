@@ -201,3 +201,52 @@ ros2 topic list | grep arm_controller
 
 ros2 launch arctos_bringup ros2_control.launch.py \
   --ros-args --log-level arctos_hardware_interface:=debug
+
+
+applications:
+    Safer motion with static obstacles (easiest)
+    Use calibrated camera + MoveIt octomap to avoid table, walls, fixtures.
+
+    Workspace monitoring / collision alerts
+    Detect when new objects enter a keep-out zone and block motion.
+
+    Point-and-inspect
+    Click a point in camera view, transform to robot frame, move robot to inspect area.
+
+    Vision-guided pick of known objects
+    Detect object pose (e.g., ArUco/AprilTag/CAD match), transform to base_link, plan grasp.
+
+    Bin picking with coarse perception
+    Use depth clustering + grasp candidates for loosely arranged parts.
+
+    Dynamic replanning around moving clutter
+    Continuously update planning scene from depth cloud and replan in near real time.
+
+    Precision assembly / insertion with visual servo assist (hardest)
+    Use camera-based pose correction during approach to improve final alignment.
+
+test:
+    cd /home/roach/ros2_ws
+    source /opt/ros/jazzy/setup.bash
+    source install/local_setup.bash
+
+    # pub detected_obj_pose
+    ros2 run arctos_bringup aruco_pose_node.py --ros-args   -p image_topic:=/kinect/image_raw   -p camera_info_topic:=/kinect/camera_info   -p output_topic:=/detected_object_pose   -p dictionary_id:=7   -p marker_size:=0.02   -p target_id:=-1   -p debug_log:=true
+
+    # check pose 
+    ros2 topic echo --once /detected_object_pose
+
+    # sub detected obj pose
+    ros2 launch arctos_bringup my_moveit.launch.py \
+    use_vision_guided_pick:=true \
+    vision_pick_execute:=true
+    vision_pick_object_pose_topic:=/detected_object_pose
+
+    # manually pub for test
+    ros2 topic pub --once /detected_object_pose geometry_msgs/msg/PoseStamped "{
+        header: {frame_id: base_link},
+        pose: {
+            position: {x: 0.30, y: 0.00, z: 0.18},
+            orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+        }
+    }"

@@ -39,6 +39,10 @@ def generate_launch_description():
     # static_tf_qz = LaunchConfiguration("static_tf_qz")
     # static_tf_qw = LaunchConfiguration("static_tf_qw")
     use_rviz = LaunchConfiguration("use_rviz")
+    rviz_config = LaunchConfiguration("rviz_config")
+    use_vision_guided_pick = LaunchConfiguration("use_vision_guided_pick")
+    vision_pick_execute = LaunchConfiguration("vision_pick_execute")
+    vision_pick_object_pose_topic = LaunchConfiguration("vision_pick_object_pose_topic")
     # 3. 定義 move_group 節點
     move_group_node = Node(
         package="moveit_ros_move_group",
@@ -90,20 +94,30 @@ def generate_launch_description():
     # )
 
     # 4. 🔴 修正：定義 RViz 節點並傳入同樣的參數
-    rviz_config_file = os.path.join(
-        get_package_share_directory("arctos_moveit_config"), "config", "moveit.rviz"
-    )
-    
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
         name="rviz2_moveit",
         output="screen",
-        arguments=["-d", rviz_config_file],
+        arguments=["-d", rviz_config],
         condition=IfCondition(use_rviz),
         parameters=[
             moveit_config.to_dict(),
         ], # 這裡必須傳入，RViz 才能解析 SRDF
+    )
+
+    vision_guided_pick_node = Node(
+        package="arctos_commander_cpp",
+        executable="vision_guided_pick",
+        name="vision_guided_pick",
+        output="screen",
+        condition=IfCondition(use_vision_guided_pick),
+        parameters=[
+            moveit_config.to_dict(),
+            {"execute": vision_pick_execute},
+            {"target_frame": "base_link"},
+            {"object_pose_topic": vision_pick_object_pose_topic},
+        ],
     )
 
     return LaunchDescription([
@@ -115,8 +129,20 @@ def generate_launch_description():
         # DeclareLaunchArgument("static_tf_qz", default_value="0.0"),
         # DeclareLaunchArgument("static_tf_qw", default_value="1.0"),
         DeclareLaunchArgument("use_rviz", default_value="true"),
+        DeclareLaunchArgument("use_vision_guided_pick", default_value="false"),
+        DeclareLaunchArgument("vision_pick_execute", default_value="false"),
+        DeclareLaunchArgument("vision_pick_object_pose_topic", default_value="/detected_object_pose"),
+        DeclareLaunchArgument(
+            "rviz_config",
+            default_value=os.path.join(
+                get_package_share_directory("arctos_moveit_config"),
+                "config",
+                "moveit_safe.rviz",
+            ),
+        ),
         # robot_state_publisher_node,
         # static_tf_node,
         move_group_node,
         rviz_node,
+        vision_guided_pick_node,
     ])

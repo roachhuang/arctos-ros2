@@ -18,6 +18,14 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/aruco_pose_node.py
+    scripts/charuco_pose_node.py
+    scripts/vision_tf_pose_bridge.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(
   DIRECTORY config launch scripts worlds
   DESTINATION share/${PROJECT_NAME}/
 )

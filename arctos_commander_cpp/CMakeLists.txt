@@ -12,6 +12,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(example_interfaces REQUIRED)
 find_package(arctos_interfaces REQUIRED)
@@ -38,9 +39,33 @@ ament_target_dependencies(commander
   arctos_interfaces
 )
 
+add_executable(point_and_inspect src/point_and_inspect.cpp)
+ament_target_dependencies(point_and_inspect
+  rclcpp
+  geometry_msgs
+  moveit_ros_planning_interface
+  moveit_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+
+add_executable(vision_guided_pick src/vision_guided_pick.cpp)
+ament_target_dependencies(vision_guided_pick
+  rclcpp
+  geometry_msgs
+  moveit_ros_planning_interface
+  moveit_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+
 install(TARGETS   
   test_moveit
   commander
+  point_and_inspect
+  vision_guided_pick
   DESTINATION lib/${PROJECT_NAME}
 )
 

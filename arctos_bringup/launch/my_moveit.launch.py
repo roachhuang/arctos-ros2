@@ -104,30 +104,16 @@ def generate_launch_description():
 
     use_rviz = LaunchConfiguration("use_rviz")
     use_kinect = LaunchConfiguration("use_kinect")
+    use_vision_guided_pick = LaunchConfiguration("use_vision_guided_pick")
+    vision_pick_execute = LaunchConfiguration("vision_pick_execute")
+    vision_pick_object_pose_topic = LaunchConfiguration("vision_pick_object_pose_topic")
+    rviz_config = LaunchConfiguration("rviz_config")
     rgb_to_depth_x = LaunchConfiguration("rgb_to_depth_x")
     rgb_to_depth_y = LaunchConfiguration("rgb_to_depth_y")
     rgb_to_depth_z = LaunchConfiguration("rgb_to_depth_z")
     rgb_to_depth_roll = LaunchConfiguration("rgb_to_depth_roll")
     rgb_to_depth_pitch = LaunchConfiguration("rgb_to_depth_pitch")
     rgb_to_depth_yaw = LaunchConfiguration("rgb_to_depth_yaw")
-
-    camera_pose = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory("arctos_bringup"),
-                "launch",
-                "camera_pose.launch.py",
-            )
-        ),
-        launch_arguments={
-            "rgb_to_depth_x": rgb_to_depth_x,
-            "rgb_to_depth_y": rgb_to_depth_y,
-            "rgb_to_depth_z": rgb_to_depth_z,
-            "rgb_to_depth_roll": rgb_to_depth_roll,
-            "rgb_to_depth_pitch": rgb_to_depth_pitch,
-            "rgb_to_depth_yaw": rgb_to_depth_yaw,
-        }.items(),
-    )
 
     # --- MoveIt (NO URDF INJECTION) ---
     move_group = IncludeLaunchDescription(
@@ -142,6 +128,16 @@ def generate_launch_description():
         launch_arguments={
             "use_rviz": use_rviz,
             "use_kinect": use_kinect,
+            "use_vision_guided_pick": use_vision_guided_pick,
+            "vision_pick_execute": vision_pick_execute,
+            "vision_pick_object_pose_topic": vision_pick_object_pose_topic,
+            "rviz_config": rviz_config,
+            "rgb_to_depth_x": rgb_to_depth_x,
+            "rgb_to_depth_y": rgb_to_depth_y,
+            "rgb_to_depth_z": rgb_to_depth_z,
+            "rgb_to_depth_roll": rgb_to_depth_roll,
+            "rgb_to_depth_pitch": rgb_to_depth_pitch,
+            "rgb_to_depth_yaw": rgb_to_depth_yaw,
         }.items(),
         # launch_arguments={
         #     # Critical: prevent MoveIt from redefining URDF
@@ -161,6 +157,18 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("use_rviz", default_value="true"),
         DeclareLaunchArgument("use_kinect", default_value="true"),
+        DeclareLaunchArgument("use_vision_guided_pick", default_value="false"),
+        DeclareLaunchArgument("vision_pick_execute", default_value="false"),
+        DeclareLaunchArgument("vision_pick_object_pose_topic", default_value="/detected_object_pose"),
+        DeclareLaunchArgument(
+            "rviz_config",
+            default_value=os.path.join(
+                get_package_share_directory("arctos_moveit_config"),
+                "config",
+                "moveit_safe.rviz",
+            ),
+            description="RViz config file path for MoveIt RViz instance",
+        ),
         DeclareLaunchArgument(
             "use_ros2_control",
             default_value="true",
@@ -184,7 +192,6 @@ def generate_launch_description():
         arm_controller,
         gripper_controller,
         joint_state_publisher,
-        camera_pose,
         move_group,
         # rviz,
     ])
