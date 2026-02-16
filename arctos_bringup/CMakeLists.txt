@@ -21,6 +21,7 @@ install(
   PROGRAMS
     scripts/aruco_pose_node.py
     scripts/charuco_pose_node.py
+    scripts/pose_stabilizer.py
     scripts/vision_tf_pose_bridge.py
   DESTINATION lib/${PROJECT_NAME}
 )

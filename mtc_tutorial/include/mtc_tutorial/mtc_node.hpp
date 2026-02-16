@@ -1,6 +1,11 @@
 #ifndef MTC_TUTORIAL_MTC_NODE_HPP
 #define MTC_TUTORIAL_MTC_NODE_HPP
 
+#include <atomic>
+#include <mutex>
+#include <string>
+
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/task_constructor/task.h>
 
@@ -47,6 +52,12 @@ public:
    */
   void setupPlanningScene();
 
+  /**
+   * @brief Wait for detected pose from topic when enabled.
+   * @return True if detected pose is available (or detection mode is disabled).
+   */
+  bool waitForDetectedPose();
+
   // =========== ROBOT GEOMETRY CONSTANTS ===========
   /// Object to be manipulated: cylinder radius (meters)
   static constexpr double OBJECT_RADIUS = 0.01; // 1 cm radius
@@ -66,9 +77,9 @@ public:
   // =========== PLANNING SCENE PARAMETERS ===========
   /// X position of pickup location (meters)
   static constexpr double PICKUP_X = 0.32;
-
   /// Y position of pickup location (meters)
   static constexpr double PICKUP_Y = -0.36;
+  static constexpr double PICKUP_Z = 0.0;
 
   /// Minimum grasp sampling angle delta (radians)
   static constexpr double MIN_ANGLE_DELTA = M_PI / 36; // 5°
@@ -81,6 +92,8 @@ public:
   static constexpr double PLACE_OFFSET_Y = -0.13;
 
 private:
+  void detectedPoseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+
   /// Compose MTC task from series of stages
   mtc::Task createTask();
 
@@ -89,6 +102,20 @@ private:
 
   /// ROS 2 node
   rclcpp::Node::SharedPtr node_;
+
+  // Pickup source selection and stability gate.
+  bool use_detected_object_pose_{false};
+  std::string detected_pose_topic_{"/detected_object_pose_stable"};
+  double detection_wait_timeout_sec_{10.0};
+
+  double pickup_x_{PICKUP_X};
+  double pickup_y_{PICKUP_Y};
+  double pickup_z_{PICKUP_Z};
+
+  std::atomic<bool> detected_pose_ready_{false};
+  std::mutex detection_mutex_;
+
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr detected_pose_sub_;
 };
 
 #endif // MTC_TUTORIAL_MTC_NODE_HPP

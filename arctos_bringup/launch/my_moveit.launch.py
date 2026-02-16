@@ -1,17 +1,19 @@
 import os
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
+    use_fake_hardware = LaunchConfiguration("use_fake_hardware")
 
     # --- Paths ---
     urdf_xacro = PathJoinSubstitution([
@@ -32,13 +34,23 @@ def generate_launch_description():
     #     "mtc.rviz"
     # )
 
+    robot_description = ParameterValue(
+        Command([
+            "xacro ",
+            urdf_xacro,
+            " use_fake_hardware:=",
+            use_fake_hardware,
+        ]),
+        value_type=str,
+    )
+
     # --- robot_state_publisher (ONLY URDF OWNER) ---
     robot_state_publisher = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         output="screen",
         parameters=[{
-            "robot_description": Command(["xacro ", urdf_xacro])
+            "robot_description": robot_description
         }]
     )
 
@@ -62,30 +74,45 @@ def generate_launch_description():
         package="controller_manager",
         executable="ros2_control_node",
         output="screen",
-        parameters=[controllers_yaml],
+        parameters=[{"robot_description": robot_description}, controllers_yaml],
         condition=IfCondition(use_ros2_control),
     )
 
     # --- Controllers ---
-    joint_state_broadcaster = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=["joint_state_broadcaster", "--controller-manager-timeout", "60"],
-        condition=IfCondition(use_ros2_control),
+    joint_state_broadcaster = TimerAction(
+        period=2.0,
+        actions=[
+            Node(
+                package="controller_manager",
+                executable="spawner",
+                arguments=["joint_state_broadcaster", "--controller-manager-timeout", "60"],
+                condition=IfCondition(use_ros2_control),
+            )
+        ],
     )
 
-    arm_controller = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=["arm_controller", "--controller-manager-timeout", "60"],
-        condition=IfCondition(use_ros2_control),
+    arm_controller = TimerAction(
+        period=4.0,
+        actions=[
+            Node(
+                package="controller_manager",
+                executable="spawner",
+                arguments=["arm_controller", "--controller-manager-timeout", "60"],
+                condition=IfCondition(use_ros2_control),
+            )
+        ],
     )
 
-    gripper_controller = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=["gripper_controller", "--controller-manager-timeout", "60"],
-        condition=IfCondition(use_ros2_control),
+    gripper_controller = TimerAction(
+        period=6.0,
+        actions=[
+            Node(
+                package="controller_manager",
+                executable="spawner",
+                arguments=["gripper_controller", "--controller-manager-timeout", "60"],
+                condition=IfCondition(use_ros2_control),
+            )
+        ],
     )
 
     use_fake_joint_states = LaunchConfiguration("use_fake_joint_states")
@@ -104,6 +131,8 @@ def generate_launch_description():
 
     use_rviz = LaunchConfiguration("use_rviz")
     use_kinect = LaunchConfiguration("use_kinect")
+    # Optional reactive pick pipeline (separate from MTC flow).
+    # Keep this disabled for the default minimal runtime path.
     use_vision_guided_pick = LaunchConfiguration("use_vision_guided_pick")
     vision_pick_execute = LaunchConfiguration("vision_pick_execute")
     vision_pick_object_pose_topic = LaunchConfiguration("vision_pick_object_pose_topic")
@@ -173,6 +202,11 @@ def generate_launch_description():
             "use_ros2_control",
             default_value="true",
             description="Start ros2_control_node and controller spawners",
+        ),
+        DeclareLaunchArgument(
+            "use_fake_hardware",
+            default_value="false",
+            description="Pass through to xacro/ros2_control to use mock hardware.",
         ),
         DeclareLaunchArgument(
             "use_fake_joint_states",

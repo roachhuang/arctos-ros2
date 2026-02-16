@@ -1,4 +1,7 @@
 #include "mtc_tutorial/mtc_node.hpp" // Include your own header first
+
+#include <mutex>
+
 #include <moveit/planning_scene/planning_scene.hpp>
 #include <moveit/planning_scene_interface/planning_scene_interface.hpp>
 #include <moveit/task_constructor/solvers.h>
@@ -19,6 +22,26 @@ static const rclcpp::Logger LOGGER = rclcpp::get_logger("mtc_tutorial");
 MTCTaskNode::MTCTaskNode(const rclcpp::NodeOptions &options)
     : node_{std::make_shared<rclcpp::Node>("mtc_node", options)}
 {
+  use_detected_object_pose_ = node_->declare_parameter<bool>("use_detected_object_pose", false);
+  detected_pose_topic_ = node_->declare_parameter<std::string>(
+      "detected_pose_topic", "/detected_object_pose_stable");
+  detection_wait_timeout_sec_ = node_->declare_parameter<double>("detection_wait_timeout_sec", 10.0);
+
+  if (use_detected_object_pose_) {
+    detected_pose_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
+        detected_pose_topic_, 10,
+        std::bind(&MTCTaskNode::detectedPoseCallback, this, std::placeholders::_1));
+    RCLCPP_INFO(
+        LOGGER,
+        "Detection-driven pickup enabled. topic=%s wait_timeout=%.1fs",
+        detected_pose_topic_.c_str(),
+        detection_wait_timeout_sec_);
+  } else {
+    RCLCPP_INFO(
+        LOGGER,
+        "Using static pickup pose x=%.3f y=%.3f z=%.3f",
+        pickup_x_, pickup_y_, pickup_z_);
+  }
 }
 
 rclcpp::node_interfaces::NodeBaseInterface::SharedPtr MTCTaskNode::getNodeBaseInterface()
@@ -37,9 +60,10 @@ void MTCTaskNode::setupPlanningScene()
   object.primitives[0].dimensions = {OBJECT_HEIGHT, OBJECT_RADIUS};
 
   geometry_msgs::msg::Pose pose;
-  pose.position.x = PICKUP_X;
-  pose.position.y = PICKUP_Y;
-  pose.position.z = OBJECT_TABLE_HEIGHT;
+  pose.position.x = pickup_x_;
+  pose.position.y = pickup_y_;
+  // pose.position.z = OBJECT_TABLE_HEIGHT;
+  pose.position.z = pickup_z_ + OBJECT_HEIGHT / 2;
   pose.orientation.w = 1.0;
   object.pose = pose;
 
@@ -47,9 +71,62 @@ void MTCTaskNode::setupPlanningScene()
   psi.applyCollisionObject(object);
 }
 
+void MTCTaskNode::detectedPoseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+{
+  std::lock_guard<std::mutex> lock(detection_mutex_);
+  pickup_x_ = msg->pose.position.x;
+  pickup_y_ = msg->pose.position.y;
+  pickup_z_ = msg->pose.position.z;
+  if (!detected_pose_ready_) {
+    detected_pose_ready_ = true;
+    RCLCPP_INFO(
+        LOGGER,
+        "Detected pickup pose accepted x=%.3f y=%.3f z=%.3f",
+        pickup_x_, pickup_y_, pickup_z_);
+  }
+}
+
+bool MTCTaskNode::waitForDetectedPose()
+{
+  if (!use_detected_object_pose_) {
+    return true;
+  }
+
+  RCLCPP_INFO(
+      LOGGER,
+      "Waiting up to %.1f s for stable detected pose on %s",
+      detection_wait_timeout_sec_,
+      detected_pose_topic_.c_str());
+
+  const auto start = node_->now();
+  rclcpp::Rate rate(20.0);
+  while (rclcpp::ok()) {
+    if (detected_pose_ready_) {
+      return true;
+    }
+    if ((node_->now() - start).seconds() > detection_wait_timeout_sec_) {
+      RCLCPP_ERROR(
+          LOGGER,
+          "Timed out waiting for stable detected pose on %s",
+          detected_pose_topic_.c_str());
+      return false;
+    }
+    rate.sleep();
+  }
+  return false;
+}
+
 void MTCTaskNode::doTask()
 {
+  if (!waitForDetectedPose()) {
+    return;
+  }
+
   setupPlanningScene(); // Ensure object exists before planning
+  RCLCPP_INFO(
+      LOGGER,
+      "Planning with pickup pose x=%.3f y=%.3f z=%.3f",
+      pickup_x_, pickup_y_, pickup_z_);
   task_ = createTask();
 
   try
@@ -471,7 +548,6 @@ int main(int argc, char **argv)
     executor.spin();
     executor.remove_node(mtc_task_node->getNodeBaseInterface()); });
 
-  mtc_task_node->setupPlanningScene();
   mtc_task_node->doTask();
 
   spin_thread->join();

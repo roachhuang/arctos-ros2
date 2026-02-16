@@ -2,6 +2,42 @@
 
 Use this checklist after updating `arctos_bringup/launch/camera_pose.launch.py`.
 
+## Default Runtime Path (Minimal)
+
+Primary pick/place flow should be:
+`aruco_pose_node.py -> /detected_object_pose -> pose_stabilizer.py -> /detected_object_pose_stable -> mtc_node`
+
+Use this as the default:
+
+```bash
+ros2 run arctos_bringup aruco_pose_node.py --ros-args \
+  -p image_topic:=/kinect/image_raw \
+  -p camera_info_topic:=/kinect/camera_info \
+  -p output_topic:=/detected_object_pose \
+  -p dictionary_id:=7 \
+  -p marker_size:=0.02 \
+  -p target_id:=5 \
+  -p debug_log:=true
+
+ros2 launch mtc_tutorial pick_place_demo.launch.py \
+  use_detected_object_pose:=true \
+  start_pose_stabilizer:=true \
+  raw_detected_pose_topic:=/detected_object_pose \
+  detected_pose_topic:=/detected_object_pose_stable \
+  stable_repeat_count:=3 \
+  stable_position_tolerance:=0.02 \
+  stable_timeout_sec:=1.0 \
+  detection_wait_timeout_sec:=10.0
+```
+
+## Optional Modules
+
+These are optional and should not be part of the default runtime stack:
+- `vision_guided_pick` (`use_vision_guided_pick:=true` in `my_moveit.launch.py`)
+- `vision_tf_pose_bridge.py` (TF frame to pose topic bridge)
+- `charuco_pose_node.py` (ChArUco board workflow)
+- `point_and_inspect` tools
+
 ### 1. Launch one stack only
 
 Hardware mode:
@@ -230,7 +266,7 @@ test:
     source /opt/ros/jazzy/setup.bash
     source install/local_setup.bash
 
-    # pub detected_obj_pose
+    # pub detected_obj_pose. where target_id is the number the aruco marker represent.
     ros2 run arctos_bringup aruco_pose_node.py --ros-args   -p image_topic:=/kinect/image_raw   -p camera_info_topic:=/kinect/camera_info   -p output_topic:=/detected_object_pose   -p dictionary_id:=7   -p marker_size:=0.02   -p target_id:=-1   -p debug_log:=true
 
     # check pose 
@@ -239,7 +275,7 @@ test:
     # sub detected obj pose
     ros2 launch arctos_bringup my_moveit.launch.py \
     use_vision_guided_pick:=true \
-    vision_pick_execute:=true
+    vision_pick_execute:=true \
     vision_pick_object_pose_topic:=/detected_object_pose
 
     # manually pub for test
@@ -250,3 +286,14 @@ test:
             orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
         }
     }"
+
+
+ros2 launch mtc_tutorial pick_place_demo.launch.py \
+  use_detected_object_pose:=true \
+  start_pose_stabilizer:=true \
+  raw_detected_pose_topic:=/detected_object_pose \
+  detected_pose_topic:=/detected_object_pose_stable \
+  stable_repeat_count:=3 \
+  stable_position_tolerance:=0.02 \
+  stable_timeout_sec:=1.0 \
+  detection_wait_timeout_sec:=10.0
