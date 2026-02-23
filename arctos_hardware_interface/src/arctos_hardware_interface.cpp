@@ -24,6 +24,52 @@ static const rclcpp::Logger LOGGER = rclcpp::get_logger("ArctosInterface");
 
 namespace arctos_hardware_interface
 {
+    namespace
+    {
+        constexpr size_t MAIN_JOINT_COUNT = 4;
+        constexpr size_t B_IDX = 4;
+        constexpr size_t C_IDX = 5;
+        constexpr double DIFF_GAIN = 0.5;
+        constexpr double B_EPS = 1e-4;
+        constexpr int32_t WRIST_COUNT_EPS = 20;
+
+        struct WristJointState
+        {
+            double b{0.0};
+            double c{0.0};
+        };
+
+        struct WristMotorState
+        {
+            double m5_abs{0.0};
+            double m6_abs{0.0};
+            int32_t c5{0};
+            int32_t c6{0};
+        };
+
+        inline WristJointState motorsToWristJoints(double m5_u, double m6_u, double diff_gain)
+        {
+            WristJointState out;
+            out.b = 0.5 * (m5_u + m6_u) / diff_gain;
+            out.c = 0.5 * (m5_u - m6_u) / diff_gain;
+            return out;
+        }
+
+        inline WristMotorState wristJointsToMotors(double b, double c,
+                                                   double m5_zero, double m6_zero,
+                                                   double diff_gain, double m6_sign,
+                                                   const ArctosHardwareInterface &hw,
+                                                   double ratio5, double ratio6)
+        {
+            WristMotorState out;
+            out.m5_abs = m5_zero + diff_gain * (b + c);
+            out.m6_abs = m6_zero + diff_gain * (b - c);
+            out.c5 = hw.radiansToCounts(out.m5_abs, ratio5);
+            out.c6 = hw.radiansToCounts(out.m6_abs * m6_sign, ratio6);
+            return out;
+        }
+    } // namespace
+
     double ArctosHardwareInterface::clampRpm(double desired_joint_vel,
                                              const MotorConfig &motor,
                                              double default_min_rpm,
@@ -254,7 +300,7 @@ namespace arctos_hardware_interface
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         // Standard Joints (0-3)
-        for (size_t i = 0; i < 4; i++)
+        for (size_t i = 0; i < MAIN_JOINT_COUNT; ++i)
         {
             double rad = countsToRadians(can_driver_.getPosition(motors_[i].can_id), motors_[i].gear_ratio);
             position_states_[i] = rad;
@@ -263,22 +309,32 @@ namespace arctos_hardware_interface
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        auto c5 = can_driver_.getPosition(motors_[4].can_id);
-        auto c6 = can_driver_.getPosition(motors_[5].can_id);
+        auto c5 = can_driver_.getPosition(motors_[B_IDX].can_id);
+        auto c6 = can_driver_.getPosition(motors_[C_IDX].can_id);
 
         // unified motor space (motor6 sign applied here!)
-        double m5_u = countsToRadians(c5, motors_[4].gear_ratio);
-        double m6_u = countsToRadians(c6, motors_[5].gear_ratio) * M6_SIGN;
+        double m5_u = countsToRadians(c5, motors_[B_IDX].gear_ratio);
+        double m6_u = countsToRadians(c6, motors_[C_IDX].gear_ratio) * M6_SIGN;
         m5_zero_ = m5_u;
         m6_zero_ = m6_u;
         wrist_zero_set_ = true;
 
-        position_states_[4] = position_states_[5] = 0;
-        position_commands_[4] = position_commands_[5] = 0;
+        position_states_[B_IDX] = position_states_[C_IDX] = 0;
+        position_commands_[B_IDX] = position_commands_[C_IDX] = 0;
 
         // tracking in physical counts for wrist (prevents initial jump)
-        last_sent_counts_[4] = c5;
-        last_sent_counts_[5] = c6;
+        last_sent_counts_[B_IDX] = c5;
+        last_sent_counts_[C_IDX] = c6;
+        last_sent_command_[B_IDX] = 0.0;
+        last_sent_command_[C_IDX] = 0.0;
+
+        if (std::abs(motors_[B_IDX].gear_ratio - motors_[C_IDX].gear_ratio) > 1e-6)
+        {
+            RCLCPP_WARN(LOGGER,
+                        "Differential motors have mismatched gear ratios: B=%.6f C=%.6f. "
+                        "This can destabilize B/C tracking.",
+                        motors_[B_IDX].gear_ratio, motors_[C_IDX].gear_ratio);
+        }
 
         RCLCPP_INFO(LOGGER, "Hardware activated. All joint positions synchronized with RViz.");
 
@@ -351,13 +407,13 @@ namespace arctos_hardware_interface
         const double dt = period.seconds();
         auto prev = position_states_;
 
-        for (size_t i = 0; i < 4; ++i)
+        for (size_t i = 0; i < MAIN_JOINT_COUNT; ++i)
         {
             int64_t encoder_counts = can_driver_.getPosition(motors_[i].can_id);
 
             double rad = countsToRadians(encoder_counts, motors_[i].gear_ratio);
 
-            // Normalize continuous joints (X, A, C) to [-π, π]
+            // Normalize only continuous joints (X, A) to [-pi, pi].
             rad = (i == 0 || i == 3) ? angles::normalize_angle(rad) : rad;
             position_states_[i] = std::isfinite(rad) ? rad : 0.0;
 
@@ -365,10 +421,12 @@ namespace arctos_hardware_interface
             updateJointVelocity(i, prev[i], dt);
         }
 
-        const int64_t c5 = can_driver_.getPosition(motors_[4].can_id);
-        const int64_t c6 = can_driver_.getPosition(motors_[5].can_id);
-        double m5_u = countsToRadians(c5, motors_[4].gear_ratio);
-        double m6_u = countsToRadians(c6, motors_[5].gear_ratio) * M6_SIGN;
+        const int64_t c5 = can_driver_.getPosition(motors_[B_IDX].can_id);
+        const int64_t c6 = can_driver_.getPosition(motors_[C_IDX].can_id);
+        (void)can_driver_.queryPosition(motors_[B_IDX].can_id);
+        (void)can_driver_.queryPosition(motors_[C_IDX].can_id);
+        double m5_u = countsToRadians(c5, motors_[B_IDX].gear_ratio);
+        double m6_u = countsToRadians(c6, motors_[C_IDX].gear_ratio) * M6_SIGN;
 
         // zero-relative
         if (wrist_zero_set_)
@@ -377,14 +435,11 @@ namespace arctos_hardware_interface
             m6_u -= m6_zero_;
         }
 
-        // Wrist kinematics: convert motor space (m5/m6) into joint space (B/C).
-        const double K = 0.5;
-        const double B = 0.5 * (m5_u + m6_u) / K;
-        const double C = angles::normalize_angle(0.5 * (m5_u - m6_u) / K);
-        position_states_[4] = B;
-        position_states_[5] = C;
-        updateJointVelocity(4, prev[4], dt);
-        updateJointVelocity(5, prev[5], dt);
+        const WristJointState wrist_state = motorsToWristJoints(m5_u, m6_u, DIFF_GAIN);
+        position_states_[B_IDX] = wrist_state.b;
+        position_states_[C_IDX] = std::clamp(wrist_state.c, motors_[C_IDX].min, motors_[C_IDX].max);
+        updateJointVelocity(B_IDX, prev[B_IDX], dt);
+        updateJointVelocity(C_IDX, prev[C_IDX], dt);
 
         // Gripper has no encoder: keep soft state synced to command
         gripper_pos_ = gripper_cmd_;
@@ -398,7 +453,7 @@ namespace arctos_hardware_interface
         double new_velocity;
         if (dt > VELOCITY_EPSILON)
         {
-            if (i == 0 || i == 3 || i == 5)
+            if (i == 0 || i == 3)
             {
                 double delta = angles::shortest_angular_distance(prev_pos, position_states_[i]);
                 new_velocity = delta / dt;
@@ -421,65 +476,71 @@ namespace arctos_hardware_interface
     hw::return_type ArctosHardwareInterface::write(const rclcpp::Time &, const rclcpp::Duration &period)
     {
         (void)period;
-        u_int16_t rpm = 0;             // suppress unused variable warning
-        constexpr double B_EPS = 1e-4; // ~0.0057 deg
+        uint16_t rpm = 0;
 
-        for (size_t i = 0; i < 4; ++i)
+        for (size_t i = 0; i < MAIN_JOINT_COUNT; ++i)
         {
-            double joint_target_rad;
-            joint_target_rad = position_commands_[i];
-            // Only send command if NOT homing (homing is a special "search" move)
-            double safe_cmd = std::clamp(joint_target_rad, motors_[i].min, motors_[i].max);
-            // 2. DATA INTEGRITY: Ensure MoveIt/MTC didn't send a NaN
+            const double safe_cmd = std::clamp(position_commands_[i], motors_[i].min, motors_[i].max);
             if (!std::isfinite(safe_cmd))
                 continue;
             if (std::abs(safe_cmd - last_sent_command_[i]) > threshold_joint(motors_[i].gear_ratio))
             {
                 int32_t target_pos = radiansToCounts(safe_cmd, motors_[i].gear_ratio);
-                rpm = static_cast<u_int16_t>(clampRpm(velocity_commands_[i], motors_[i], 50.0, 2000.0));
+                rpm = static_cast<uint16_t>(clampRpm(velocity_commands_[i], motors_[i], 50.0, 2000.0));
                 can_driver_.runPositionAbs(motors_[i].can_id, rpm, motors_[i].acc, target_pos);
-                // Update tracking
                 last_sent_command_[i] = safe_cmd;
             }
         }
 
-        // ----- joint limits -----
-        constexpr double B_MIN = -1.55, B_MAX = 1.55;
-        constexpr double C_MIN = -M_PI, C_MAX = M_PI;
-
         // ----- desired joints (relative) -----
-        const double B = std::clamp(position_commands_[4], B_MIN + B_EPS, B_MAX - B_EPS);
-        const double C = std::clamp(angles::normalize_angle(position_commands_[5]), C_MIN, C_MAX);
+        if (!std::isfinite(position_commands_[B_IDX]) || !std::isfinite(position_commands_[C_IDX]))
+            return hw::return_type::OK;
+        const double B = std::clamp(position_commands_[B_IDX], motors_[B_IDX].min + B_EPS, motors_[B_IDX].max - B_EPS);
+        const double C = std::clamp(position_commands_[C_IDX], motors_[C_IDX].min, motors_[C_IDX].max);
 
         if (!wrist_zero_set_)
             return hw::return_type::OK;
-        // Wrist kinematics: convert desired joint space (B/C) into motor space (m5/m6).
-        const double K = 0.5; // diff_gain
-        double m5_u_abs = m5_zero_ + K * (B + C);
-        double m6_u_abs = m6_zero_ + K * (B - C);
+        const WristMotorState wrist_target = wristJointsToMotors(
+            B, C, m5_zero_, m6_zero_, DIFF_GAIN, M6_SIGN,
+            *this, motors_[B_IDX].gear_ratio, motors_[C_IDX].gear_ratio);
 
-        // ----- convert to counts (must llround, division before cast) -----
-        const double effective_gear_ratio = motors_[5].gear_ratio; // both joints use same gear ratio
-        const int32_t c5 = radiansToCounts(m5_u_abs, effective_gear_ratio);
-        const int32_t c6 = radiansToCounts(m6_u_abs * M6_SIGN, effective_gear_ratio); // back to physical
-
-        // ----- deadband in COUNTS (prevents spamming) -----
-        constexpr int32_t COUNT_EPS = 20; // tune: 5~20 counts
-        if (std::abs(c5 - last_sent_counts_[4]) > COUNT_EPS ||
-            std::abs(c6 - last_sent_counts_[5]) > COUNT_EPS)
+        if (std::abs(wrist_target.c5 - last_sent_counts_[B_IDX]) > WRIST_COUNT_EPS ||
+            std::abs(wrist_target.c6 - last_sent_counts_[C_IDX]) > WRIST_COUNT_EPS)
         {
-            rpm = static_cast<u_int16_t>(clampRpm(velocity_commands_[4], motors_[4], 50.0, 2000.0));
-            can_driver_.runPositionAbs(motors_[4].can_id, rpm, motors_[4].acc, c5);
+            double shared_wrist_vel = std::max(std::abs(velocity_commands_[B_IDX]),
+                                               std::abs(velocity_commands_[C_IDX]));
+            if (!std::isfinite(shared_wrist_vel) || shared_wrist_vel < 1e-4)
+            {
+                shared_wrist_vel = std::max(std::abs(motors_[B_IDX].vel), std::abs(motors_[C_IDX].vel));
+            }
+            const uint16_t rpm5 = static_cast<uint16_t>(clampRpm(shared_wrist_vel, motors_[B_IDX], 50.0, 2000.0));
+            const uint16_t rpm6 = static_cast<uint16_t>(clampRpm(shared_wrist_vel, motors_[C_IDX], 50.0, 2000.0));
+            const bool ok5 = can_driver_.runPositionAbs(motors_[B_IDX].can_id, rpm5, motors_[B_IDX].acc, wrist_target.c5);
+            const bool ok6 = can_driver_.runPositionAbs(motors_[C_IDX].can_id, rpm6, motors_[C_IDX].acc, wrist_target.c6);
 
-            rpm = static_cast<u_int16_t>(clampRpm(velocity_commands_[5], motors_[5], 50.0, 2000.0));
-            can_driver_.runPositionAbs(motors_[5].can_id, rpm, motors_[5].acc, c6);
-
-            last_sent_counts_[4] = c5;
-            last_sent_counts_[5] = c6;
+            if (ok5)
+            {
+                last_sent_counts_[B_IDX] = wrist_target.c5;
+                last_sent_command_[B_IDX] = B;
+            }
+            if (ok6)
+            {
+                last_sent_counts_[C_IDX] = wrist_target.c6;
+                last_sent_command_[C_IDX] = C;
+            }
+            if (!ok5 || !ok6)
+            {
+                RCLCPP_WARN_THROTTLE(
+                    LOGGER, *this->get_clock(), 1000,
+                    "Wrist command send failed (ok5=%d ok6=%d, rpm5=%u rpm6=%u, c5=%d c6=%d)",
+                    ok5 ? 1 : 0, ok6 ? 1 : 0, rpm5, rpm6, wrist_target.c5, wrist_target.c6);
+            }
 
             RCLCPP_INFO_THROTTLE(LOGGER, *this->get_clock(), 500,
                                  "J5=%.2f deg, J6=%.2f deg, m5_abs=%.2f deg, m6_abs=%.2f deg, c5=%d c6=%d",
-                                 angles::to_degrees(B), angles::to_degrees(C), angles::to_degrees(m5_u_abs), angles::to_degrees(m6_u_abs), c5, c6);
+                                 angles::to_degrees(B), angles::to_degrees(C),
+                                 angles::to_degrees(wrist_target.m5_abs), angles::to_degrees(wrist_target.m6_abs),
+                                 wrist_target.c5, wrist_target.c6);
         }
 
         // ----- gripper (command-only CAN device, no encoder) -----
