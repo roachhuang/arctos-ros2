@@ -29,9 +29,11 @@ namespace arctos_hardware_interface
         constexpr size_t MAIN_JOINT_COUNT = 4;
         constexpr size_t B_IDX = 4;
         constexpr size_t C_IDX = 5;
-        constexpr double DIFF_GAIN = 0.5;
+        constexpr double DIFF_GAIN = ArctosHardwareInterface::WRIST_DIFF_GAIN;
         constexpr double B_EPS = 1e-4;
-        constexpr int32_t WRIST_COUNT_EPS = 20;
+        // Smaller command deadband for the differential pair to reduce "step/hold"
+        // behavior and keep B/C motion visually continuous.
+        constexpr int32_t WRIST_COUNT_EPS = 5;
 
         struct WristJointState
         {
@@ -50,6 +52,12 @@ namespace arctos_hardware_interface
         inline WristJointState motorsToWristJoints(double m5_u, double m6_u, double diff_gain)
         {
             WristJointState out;
+            if (diff_gain == 0.0)
+            {
+                out.b = 0.0;
+                out.c = 0.0;
+                return out;
+            }
             out.b = 0.5 * (m5_u + m6_u) / diff_gain;
             out.c = 0.5 * (m5_u - m6_u) / diff_gain;
             return out;
@@ -436,7 +444,7 @@ namespace arctos_hardware_interface
         }
 
         const WristJointState wrist_state = motorsToWristJoints(m5_u, m6_u, DIFF_GAIN);
-        position_states_[B_IDX] = wrist_state.b;
+        position_states_[B_IDX] = std::clamp(wrist_state.b, motors_[B_IDX].min, motors_[B_IDX].max);
         position_states_[C_IDX] = std::clamp(wrist_state.c, motors_[C_IDX].min, motors_[C_IDX].max);
         updateJointVelocity(B_IDX, prev[B_IDX], dt);
         updateJointVelocity(C_IDX, prev[C_IDX], dt);
@@ -507,24 +515,34 @@ namespace arctos_hardware_interface
         if (std::abs(wrist_target.c5 - last_sent_counts_[B_IDX]) > WRIST_COUNT_EPS ||
             std::abs(wrist_target.c6 - last_sent_counts_[C_IDX]) > WRIST_COUNT_EPS)
         {
-            double shared_wrist_vel = std::max(std::abs(velocity_commands_[B_IDX]),
-                                               std::abs(velocity_commands_[C_IDX]));
-            if (!std::isfinite(shared_wrist_vel) || shared_wrist_vel < 1e-4)
+            double vb = velocity_commands_[B_IDX];
+            double vc = velocity_commands_[C_IDX];
+            if (!std::isfinite(vb))
+                vb = 0.0;
+            if (!std::isfinite(vc))
+                vc = 0.0;
+
+            // Differential kinematics in velocity form:
+            // m5_dot = gain * (B_dot + C_dot), m6_dot = gain * (B_dot - C_dot).
+            double m5_vel = std::abs(DIFF_GAIN * (vb + vc));
+            double m6_vel = std::abs(DIFF_GAIN * (vb - vc));
+
+            // Fallback when trajectory velocity is absent/near-zero.
+            if (m5_vel < 1e-4 && m6_vel < 1e-4)
             {
-                shared_wrist_vel = std::max(std::abs(motors_[B_IDX].vel), std::abs(motors_[C_IDX].vel));
+                m5_vel = std::abs(motors_[B_IDX].vel);
+                m6_vel = std::abs(motors_[C_IDX].vel);
             }
-            const uint16_t rpm5 = static_cast<uint16_t>(clampRpm(shared_wrist_vel, motors_[B_IDX], 50.0, 2000.0));
-            const uint16_t rpm6 = static_cast<uint16_t>(clampRpm(shared_wrist_vel, motors_[C_IDX], 50.0, 2000.0));
+
+            const uint16_t rpm5 = static_cast<uint16_t>(clampRpm(m5_vel, motors_[B_IDX], 50.0, 2000.0));
+            const uint16_t rpm6 = static_cast<uint16_t>(clampRpm(m6_vel, motors_[C_IDX], 50.0, 2000.0));
             const bool ok5 = can_driver_.runPositionAbs(motors_[B_IDX].can_id, rpm5, motors_[B_IDX].acc, wrist_target.c5);
             const bool ok6 = can_driver_.runPositionAbs(motors_[C_IDX].can_id, rpm6, motors_[C_IDX].acc, wrist_target.c6);
 
-            if (ok5)
+            if (ok5 && ok6)
             {
                 last_sent_counts_[B_IDX] = wrist_target.c5;
                 last_sent_command_[B_IDX] = B;
-            }
-            if (ok6)
-            {
                 last_sent_counts_[C_IDX] = wrist_target.c6;
                 last_sent_command_[C_IDX] = C;
             }
