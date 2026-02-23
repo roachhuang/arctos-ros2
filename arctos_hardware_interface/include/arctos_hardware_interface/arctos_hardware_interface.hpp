@@ -36,6 +36,7 @@ namespace arctos_hardware_interface
   {
   public:
     static constexpr double M6_SIGN = -1.0;
+    static constexpr double WRIST_DIFF_GAIN = 0.5;
     // (counts per revolution for the encoder), step size = 2pi/16384 radians ~ 0.00038 rads
     static constexpr int ENCODER_COUNTS_PER_REVOLUTION = 16384;
 
