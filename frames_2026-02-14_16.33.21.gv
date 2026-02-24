@@ -1,0 +1,19 @@
+digraph G {
+"world" -> "base_link"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"tool_link" -> "Gripper_1"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"Link_6_1" -> "tool_link"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"Link_5_1" -> "Link_6_1"[label=" Broadcaster: Authority undetectable\nAverage rate: 16.766\nBuffer length: 10.02\nMost recent transform: 1771058001.022418\nOldest transform: 1771057991.002401\n"];
+"base_link" -> "kinect_rgb"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"Link_3_1" -> "Link_4_1"[label=" Broadcaster: Authority undetectable\nAverage rate: 16.766\nBuffer length: 10.02\nMost recent transform: 1771058001.022418\nOldest transform: 1771057991.002401\n"];
+"Link_2_1" -> "Link_3_1"[label=" Broadcaster: Authority undetectable\nAverage rate: 16.766\nBuffer length: 10.02\nMost recent transform: 1771058001.022418\nOldest transform: 1771057991.002401\n"];
+"Link_4_1" -> "Link_5_1"[label=" Broadcaster: Authority undetectable\nAverage rate: 16.766\nBuffer length: 10.02\nMost recent transform: 1771058001.022418\nOldest transform: 1771057991.002401\n"];
+"Gripper_1" -> "Left_jaw_1"[label=" Broadcaster: Authority undetectable\nAverage rate: 16.766\nBuffer length: 10.02\nMost recent transform: 1771058001.022418\nOldest transform: 1771057991.002401\n"];
+"Gripper_1" -> "Right_jaw_1"[label=" Broadcaster: Authority undetectable\nAverage rate: 16.766\nBuffer length: 10.02\nMost recent transform: 1771058001.022418\nOldest transform: 1771057991.002401\n"];
+"base_link" -> "Link_1_1"[label=" Broadcaster: Authority undetectable\nAverage rate: 16.766\nBuffer length: 10.02\nMost recent transform: 1771058001.022418\nOldest transform: 1771057991.002401\n"];
+"Link_1_1" -> "Link_2_1"[label=" Broadcaster: Authority undetectable\nAverage rate: 16.766\nBuffer length: 10.02\nMost recent transform: 1771058001.022418\nOldest transform: 1771057991.002401\n"];
+"kinect_rgb" -> "handeye_target"[label=" Broadcaster: Authority undetectable\nAverage rate: 14.302\nBuffer length: 10.069\nMost recent transform: 1771058001.065182\nOldest transform: 1771057990.996672\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 1771058001.1013606"[ shape=plaintext ] ;
+}->"world";
+}
