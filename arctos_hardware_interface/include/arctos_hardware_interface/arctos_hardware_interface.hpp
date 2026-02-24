@@ -134,6 +134,7 @@ namespace arctos_hardware_interface
 
     // Helper methods
     void loadHardwareParameters();
+    bool configureCanId6Startup();
 
     void updateJointVelocity(size_t joint_index, double prev_position, double dt);
 

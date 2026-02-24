@@ -141,6 +141,7 @@ struct CANCommands {
     static constexpr uint8_t SET_HOME_PARAMS = 0x90; /**< Set home parameters command. */
     static constexpr uint8_t GO_HOME = 0x91; /**< Go home command. */
     static constexpr uint8_t SET_ZERO_POSITION = 0x92; /**< Set zero command. */
+    static constexpr uint8_t SET_HOLDING_CURRENT = 0x9B; /**< Set holding current percentage. */
     
     // Motion commands
     static constexpr uint8_t ENABLE_MOTOR = 0xF3; /**< Enable motor command. */
@@ -174,6 +175,5 @@ struct MotorConstants {
 };
 
 }   // end namespace
-
 
 

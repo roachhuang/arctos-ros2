@@ -1,6 +1,7 @@
 #include "arctos_hardware_interface/arctos_hardware_interface.hpp"
 #include <algorithm>
 #include <angles/angles.h>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <fcntl.h>
@@ -156,6 +157,11 @@ namespace arctos_hardware_interface
                          "Failed to open CAN interface: %s", can_interface_.c_str());
             return CallbackReturn::ERROR;
         }
+        if (!configureCanId6Startup())
+        {
+            RCLCPP_FATAL(LOGGER, "Failed to send MKS startup config for CAN ID 6.");
+            return CallbackReturn::ERROR;
+        }
         gripper_can_enabled_ = openGripperCanSocket();
         if (!gripper_can_enabled_)
         {
@@ -288,6 +294,157 @@ namespace arctos_hardware_interface
                 throw std::runtime_error("Missing arm joint parameters");
             }
         }
+    }
+
+    bool ArctosHardwareInterface::configureCanId6Startup()
+    {
+        constexpr uint16_t kCanId = 6;
+        constexpr int kDefaultMstep = 16;
+        constexpr int kDefaultMode = static_cast<int>(mks_servo_driver::MotorMode::SR_vFOC);
+        constexpr int kDefaultMa = 1600;
+        constexpr int kCommandGapMs = 20;
+
+        auto parseBool = [](const std::string &value, bool default_v) -> bool
+        {
+            std::string normalized = value;
+            std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+                           [](unsigned char c)
+                           { return static_cast<char>(std::tolower(c)); });
+            if (normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on")
+                return true;
+            if (normalized == "0" || normalized == "false" || normalized == "no" || normalized == "off")
+                return false;
+            return default_v;
+        };
+
+        auto getInt = [this](const char *key, int default_v) -> int
+        {
+            const auto it = info_.hardware_parameters.find(key);
+            if (it == info_.hardware_parameters.end())
+                return default_v;
+            try
+            {
+                return std::stoi(it->second);
+            }
+            catch (const std::exception &e)
+            {
+                RCLCPP_WARN(LOGGER, "Invalid integer for '%s' (%s). Using default=%d.",
+                            key, e.what(), default_v);
+                return default_v;
+            }
+        };
+
+        auto getBool = [this, &parseBool](const char *key, bool default_v) -> bool
+        {
+            const auto it = info_.hardware_parameters.find(key);
+            if (it == info_.hardware_parameters.end())
+                return default_v;
+            return parseBool(it->second, default_v);
+        };
+
+        const bool enable_startup_cfg = getBool("mks_cfg_canid6_enable", true);
+        if (!enable_startup_cfg)
+        {
+            RCLCPP_INFO(LOGGER, "Skipping CAN ID 6 startup config (mks_cfg_canid6_enable=false).");
+            return true;
+        }
+
+        const int mstep = kDefaultMstep;
+        if (info_.hardware_parameters.find("mks_cfg_canid6_mstep") != info_.hardware_parameters.end())
+        {
+            RCLCPP_WARN(LOGGER, "Ignoring mks_cfg_canid6_mstep; forcing CAN ID %u mstep=%d.", kCanId, mstep);
+        }
+        const int mode = std::clamp(getInt("mks_cfg_canid6_mode", kDefaultMode), 0, 5);
+        const int ma = std::clamp(getInt("mks_cfg_canid6_ma", kDefaultMa), 0, 3000);
+        const bool protect_enable = getBool("mks_cfg_canid6_protect_enable", true);
+
+        auto is_ok_status = [](uint8_t status) -> bool
+        {
+            // Per MKS protocol used on this hardware: byte2==1 => success, 0 => fail.
+            return status == 0x01;
+        };
+
+        auto send_cfg_cmd = [this, &is_ok_status](
+                                uint16_t id, uint8_t cmd, const std::vector<uint8_t> &params, const char *label) -> bool
+        {
+            const uint8_t status = can_driver_.sendCmdWithStatusSync(id, cmd, params, 150);
+            if (!is_ok_status(status))
+            {
+                RCLCPP_ERROR(LOGGER, "CAN ID %u %s failed (cmd=0x%02X status=0x%02X).", id, label, cmd, status);
+                return false;
+            }
+            RCLCPP_INFO(LOGGER, "CAN ID %u %s ok (cmd=0x%02X status=0x%02X).", id, label, cmd, status);
+            return true;
+        };
+
+        if (!send_cfg_cmd(
+                kCanId,
+                mks_servo_driver::CANCommands::SET_SUBDIVISIONS,
+                {0x10}, // 16
+                "Mstep"))
+        {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
+
+        if (!send_cfg_cmd(
+                kCanId,
+                mks_servo_driver::CANCommands::SET_WORKING_MODE,
+                {static_cast<uint8_t>(mode)},
+                "Mode"))
+        {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
+
+        if (!send_cfg_cmd(
+                kCanId,
+                mks_servo_driver::CANCommands::SET_ENABLE_SETTINGS,
+                {0x00},
+                "EN pin active level (low)"))
+        {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
+
+        if (!send_cfg_cmd(
+                kCanId,
+                mks_servo_driver::CANCommands::SET_CURRENT,
+                {static_cast<uint8_t>((ma >> 8) & 0xFF), static_cast<uint8_t>(ma & 0xFF)},
+                "Run current"))
+        {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
+
+        if (protect_enable)
+        {
+            if (!send_cfg_cmd(
+                    kCanId,
+                    mks_servo_driver::CANCommands::ENABLE_SHAFT_PROTECTION,
+                    {0x00}, // disable
+                    "Protection enable"))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            if (!send_cfg_cmd(
+                    kCanId,
+                    mks_servo_driver::CANCommands::RELEASE_SHAFT_PROTECTION,
+                    {},
+                    "Protection release"))
+            {
+                return false;
+            }
+        }
+
+        RCLCPP_INFO(LOGGER,
+                    "CAN ID %u startup config requested: mstep=%d mode=%d en_pin=low ma=%d protect=%s",
+                    kCanId, mstep, mode, ma,
+                    protect_enable ? "on" : "off");
+        return true;
     }
 
     CallbackReturn ArctosHardwareInterface::on_activate(const rclcpp_lifecycle::State &previous_state)

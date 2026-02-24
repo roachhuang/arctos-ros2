@@ -121,6 +121,12 @@ namespace mks_servo_driver
         return ::write(sock_, &tx, sizeof(tx)) == sizeof(tx);
     }
 
+    uint8_t MksServoDriver::sendCmdWithStatusSync(
+        uint16_t id, uint8_t code, const std::vector<uint8_t> &params, int timeout_ms)
+    {
+        return sendCmdSync(id, code, params, timeout_ms);
+    }
+
     bool MksServoDriver::runPositionAbs(uint16_t id, uint16_t speed, uint8_t accel, int32_t position)
     {
         uint8_t acc_value = std::min(std::max(accel, uint8_t(0)), uint8_t(255));
@@ -172,7 +178,19 @@ namespace mks_servo_driver
     void MksServoDriver::setHoldingCurrent(uint16_t id, uint8_t percentage)
     {
         uint8_t holding_val = (percentage - 10) / 10; // convert to 0-8 range.
-        sendCmd(id, 0xf2, {holding_val});
+        sendCmd(id, CANCommands::SET_HOLDING_CURRENT, {holding_val});
+    }
+
+    uint8_t MksServoDriver::setHoldingCurrentSync(uint16_t id, uint8_t percentage, int timeout_ms)
+    {
+        uint8_t holding_val = (percentage - 10) / 10; // convert to 0-8 range.
+        // Manual v1.0.6 uses 0x9B; keep 0xF2 fallback for older firmware variants.
+        uint8_t st = sendCmdSync(id, CANCommands::SET_HOLDING_CURRENT, {holding_val}, timeout_ms);
+        if (st == 0xFF)
+        {
+            st = sendCmdSync(id, 0xF2, {holding_val}, timeout_ms);
+        }
+        return st;
     }
 
     std::vector<int64_t> MksServoDriver::getPositions()
@@ -393,6 +411,14 @@ namespace mks_servo_driver
         case CANCommands::ABSOLUTE_POSITION:
         case CANCommands::ENABLE_MOTOR:
         case CANCommands::SET_ZERO_POSITION:
+        case CANCommands::SET_WORKING_MODE:
+        case CANCommands::SET_CURRENT:
+        case CANCommands::SET_SUBDIVISIONS:
+        case CANCommands::SET_ENABLE_SETTINGS:
+        case CANCommands::ENABLE_SHAFT_PROTECTION:
+        case CANCommands::RELEASE_SHAFT_PROTECTION:
+        case CANCommands::SET_HOLDING_CURRENT:
+        case 0xF2: // set holding current
             if (frame.can_dlc >= 3)
             {
                 std::lock_guard<std::mutex> lock(status_mutex_);

@@ -52,6 +52,9 @@ namespace mks_servo_driver
         void deactive();
 
         bool sendCmd(uint16_t id, uint8_t code, const std::vector<uint8_t> &params = {});
+        // Send an arbitrary command and wait for status response (0xFF = timeout/send failure).
+        uint8_t sendCmdWithStatusSync(
+            uint16_t id, uint8_t code, const std::vector<uint8_t> &params = {}, int timeout_ms = 150);
 
         /**
          * @brief Send absolute position command to servo
@@ -70,6 +73,7 @@ namespace mks_servo_driver
         void setZero(uint16_t id);
         uint8_t setZeroSync(uint16_t id, int timeout_ms = 100);
         void setHoldingCurrent(uint16_t id, uint8_t percentage);
+        uint8_t setHoldingCurrentSync(uint16_t id, uint8_t percentage, int timeout_ms = 150);
         void home(uint8_t);
         uint8_t homeSync(uint16_t id, int timeout_ms = 5000);
         void EmergencyStop(uint16_t id);
