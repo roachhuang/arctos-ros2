@@ -13,10 +13,23 @@ git show v1.0.0
 git push --tags
 
 git stash:
-    git stash
-    git checkout bugfix
-    git checkout master
+   # 1) Stash current work (tracked + untracked)
+    git stash push -u -m "wip-before-test"
+
+    # 2) Go to a specific commit or tag (detached HEAD, safe for read-only testing)
+    git switch --detach <commit-or-tag>
+    # example: git switch --detach 1710a8c
+    # example: git switch --detach v2.1.0
+
+    # 3) Run your tests here (do not commit)
+
+    # 4) Return to your working branch
+    git switch integrate/recover-pre-stash
+    # (or your branch name)
+
+    # 5) Re-apply your stashed work
     git stash pop
+
 
 when to use rebase:
     When: You have messy, incremental commits (e.g., "WIP" or "fix typo" commits) in your local branch.
