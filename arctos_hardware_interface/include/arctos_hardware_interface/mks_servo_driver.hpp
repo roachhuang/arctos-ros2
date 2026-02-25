@@ -68,13 +68,10 @@ namespace mks_servo_driver
         uint8_t runPositionAbsSync(uint16_t id, uint16_t speed, uint8_t accel, int32_t position, int timeout_ms = 100);
 
         bool queryPosition(uint16_t id);
-        bool enableMotor(uint16_t id, bool flag);
+        bool queryPositionSync(uint16_t id, int timeout_ms = 100);
+        bool isPositionFresh(uint16_t id, int max_age_ms);
         uint8_t enableMotorSync(uint16_t id, bool flag, int timeout_ms = 100);
-        void setZero(uint16_t id);
         uint8_t setZeroSync(uint16_t id, int timeout_ms = 100);
-        void setHoldingCurrent(uint16_t id, uint8_t percentage);
-        uint8_t setHoldingCurrentSync(uint16_t id, uint8_t percentage, int timeout_ms = 150);
-        void home(uint8_t);
         uint8_t homeSync(uint16_t id, int timeout_ms = 5000);
         void EmergencyStop(uint16_t id);
         bool queryIO(uint16_t id);
@@ -102,6 +99,8 @@ namespace mks_servo_driver
         std::mutex tx_mutex_;
         static constexpr int kNumMotors = 6;
         std::vector<int64_t> positions_;
+        std::vector<std::chrono::steady_clock::time_point> position_timestamps_;
+        std::vector<bool> position_valid_;
         std::vector<bool> in1_states_;
         std::vector<bool> in2_states_;
         std::vector<uint8_t> command_status_;

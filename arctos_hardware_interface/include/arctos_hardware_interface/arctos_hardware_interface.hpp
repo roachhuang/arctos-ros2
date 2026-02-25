@@ -134,6 +134,7 @@ namespace arctos_hardware_interface
 
     // Helper methods
     void loadHardwareParameters();
+    bool sendCheckedCanCommand(uint16_t id, uint8_t cmd, const std::vector<uint8_t> &params, const char *label, int timeout_ms = 150);
     bool configureCanId6Startup();
 
     void updateJointVelocity(size_t joint_index, double prev_position, double dt);

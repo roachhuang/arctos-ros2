@@ -15,6 +15,8 @@ namespace mks_servo_driver
     MksServoDriver::MksServoDriver()
     {
         positions_.resize(6, 0);
+        position_timestamps_.resize(6, std::chrono::steady_clock::time_point::min());
+        position_valid_.resize(6, false);
         in1_states_.resize(6, true); // low activate
         in2_states_.resize(6, true);
         command_status_.resize(6, 0);
@@ -75,7 +77,7 @@ namespace mks_servo_driver
         running_ = false;
         for (uint16_t id = 1; id <= 6; ++id)
         {
-            enableMotor(id, false);
+            sendCmdWithStatusSync(id, CANCommands::ENABLE_MOTOR, {0x00}, 100);
         }
 
         if (poll_thread_.joinable())
@@ -141,15 +143,48 @@ namespace mks_servo_driver
         return sendCmd(id, CANCommands::READ_ENCODER, {});
     }
 
-    bool MksServoDriver::enableMotor(uint16_t id, bool flag)
+    bool MksServoDriver::queryPositionSync(uint16_t id, int timeout_ms)
     {
-        uint8_t enable_val = flag ? 0x01 : 0x00;
-        return sendCmd(id, CANCommands::ENABLE_MOTOR, {enable_val});
+        if (id < 1 || id > 6)
+            return false;
+
+        const size_t idx = can_index(id);
+        std::chrono::steady_clock::time_point prev_stamp = std::chrono::steady_clock::time_point::min();
+        {
+            std::lock_guard<std::mutex> lock(pos_mutex_);
+            prev_stamp = position_timestamps_[idx];
+        }
+
+        if (!queryPosition(id))
+            return false;
+
+        const auto start = std::chrono::steady_clock::now();
+        while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(timeout_ms))
+        {
+            {
+                std::lock_guard<std::mutex> lock(pos_mutex_);
+                if (position_valid_[idx] && position_timestamps_[idx] > prev_stamp)
+                {
+                    return true;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return false;
     }
 
-    uint8_t MksServoDriver::enableMotorSync(uint16_t id, bool flag, int timeout_ms)
+    bool MksServoDriver::isPositionFresh(uint16_t id, int max_age_ms)
     {
-        return sendCmdSync(id, CANCommands::ENABLE_MOTOR, {flag ? uint8_t(0x01) : uint8_t(0x00)}, timeout_ms);
+        if (id < 1 || id > 6)
+            return false;
+
+        const auto now = std::chrono::steady_clock::now();
+        std::lock_guard<std::mutex> lock(pos_mutex_);
+        const size_t idx = can_index(id);
+        if (!position_valid_[idx])
+            return false;
+        const auto age = now - position_timestamps_[idx];
+        return age <= std::chrono::milliseconds(max_age_ms);
     }
 
     uint8_t MksServoDriver::runPositionAbsSync(uint16_t id, uint16_t speed, uint8_t accel, int32_t position, int timeout_ms)
@@ -170,40 +205,11 @@ namespace mks_servo_driver
         return sendCmdSync(id, CANCommands::SET_ZERO_POSITION, {}, timeout_ms);
     }
 
-    void MksServoDriver::setZero(uint16_t id)
-    {
-        sendCmd(id, CANCommands::SET_ZERO_POSITION, {});
-    }
-
-    void MksServoDriver::setHoldingCurrent(uint16_t id, uint8_t percentage)
-    {
-        uint8_t holding_val = (percentage - 10) / 10; // convert to 0-8 range.
-        sendCmd(id, CANCommands::SET_HOLDING_CURRENT, {holding_val});
-    }
-
-    uint8_t MksServoDriver::setHoldingCurrentSync(uint16_t id, uint8_t percentage, int timeout_ms)
-    {
-        uint8_t holding_val = (percentage - 10) / 10; // convert to 0-8 range.
-        // Manual v1.0.6 uses 0x9B; keep 0xF2 fallback for older firmware variants.
-        uint8_t st = sendCmdSync(id, CANCommands::SET_HOLDING_CURRENT, {holding_val}, timeout_ms);
-        if (st == 0xFF)
-        {
-            st = sendCmdSync(id, 0xF2, {holding_val}, timeout_ms);
-        }
-        return st;
-    }
-
     std::vector<int64_t> MksServoDriver::getPositions()
     {
         std::lock_guard<std::mutex> lock(pos_mutex_);
         return positions_;
     }
-
-    void MksServoDriver::home(uint8_t can_id)
-    {
-        sendCmd(can_id, CANCommands::GO_HOME, {});
-    }
-    
 
     uint8_t MksServoDriver::sendCmdSync(uint16_t id, uint8_t cmd, const std::vector<uint8_t> &params, int timeout_ms, bool use_homing_status)
     {
@@ -257,18 +263,6 @@ namespace mks_servo_driver
         return sendCmd(id, CANCommands::READ_IO, {});
     }
 
-    // std::vector<bool> MksServoDriver::getIN1States()
-    // {
-    //     std::lock_guard<std::mutex> lock(io_mutex_);
-    //     return in1_states_;
-    // }
-
-    // std::vector<bool> MksServoDriver::getIN2States()
-    // {
-    //     std::lock_guard<std::mutex> lock(io_mutex_);
-    //     return in2_states_;
-    // }
-
     bool MksServoDriver::getIN1State(uint16_t id)
     {
         if (id < 1 || id > 6)
@@ -299,11 +293,6 @@ namespace mks_servo_driver
         std::lock_guard<std::mutex> lock(status_mutex_);
         return command_status_[can_index(id)];
     }
-    // std::vector<uint8_t> MksServoDriver::getCommandStatus()
-    // {
-    //     std::lock_guard<std::mutex> lock(status_mutex_);
-    //     return command_status_;
-    // }
 
     uint8_t MksServoDriver::getHomingStatus(uint16_t id)
     {
@@ -386,6 +375,8 @@ namespace mks_servo_driver
                 const int64_t pos = toI48(&frame.data[1]);
                 std::lock_guard<std::mutex> lock(pos_mutex_);
                 positions_[idx] = pos;
+                position_timestamps_[idx] = std::chrono::steady_clock::now();
+                position_valid_[idx] = true;
             }
             break;
 
@@ -415,8 +406,7 @@ namespace mks_servo_driver
         case CANCommands::SET_CURRENT:
         case CANCommands::SET_SUBDIVISIONS:
         case CANCommands::SET_ENABLE_SETTINGS:
-        case CANCommands::ENABLE_SHAFT_PROTECTION:
-        case CANCommands::RELEASE_SHAFT_PROTECTION:
+        case CANCommands::SET_SHAFT_PROTECTION:
         case CANCommands::SET_HOLDING_CURRENT:
         case 0xF2: // set holding current
             if (frame.can_dlc >= 3)

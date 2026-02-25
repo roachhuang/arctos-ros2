@@ -150,6 +150,7 @@ namespace arctos_hardware_interface
         RCLCPP_INFO(LOGGER, "Configuring hardware interface...");
 
         loadHardwareParameters();
+        RCLCPP_INFO(LOGGER, "Hardware parameters loaded (can_interface=%s).", can_interface_.c_str());
 
         if (!can_driver_.connect(can_interface_))
         {
@@ -157,15 +158,25 @@ namespace arctos_hardware_interface
                          "Failed to open CAN interface: %s", can_interface_.c_str());
             return CallbackReturn::ERROR;
         }
+        RCLCPP_INFO(LOGGER, "CAN driver connected on %s.", can_interface_.c_str());
+
+        RCLCPP_INFO(LOGGER, "Applying CAN ID 6 startup config...");
         if (!configureCanId6Startup())
         {
             RCLCPP_FATAL(LOGGER, "Failed to send MKS startup config for CAN ID 6.");
             return CallbackReturn::ERROR;
         }
+        RCLCPP_INFO(LOGGER, "CAN ID 6 startup config complete.");
+
+        RCLCPP_INFO(LOGGER, "Opening gripper CAN socket...");
         gripper_can_enabled_ = openGripperCanSocket();
         if (!gripper_can_enabled_)
         {
             RCLCPP_WARN(LOGGER, "Gripper CAN socket not available; gripper will be command-only (no CAN output).");
+        }
+        else
+        {
+            RCLCPP_INFO(LOGGER, "Gripper CAN socket opened.");
         }
 
         return CallbackReturn::SUCCESS;
@@ -296,6 +307,19 @@ namespace arctos_hardware_interface
         }
     }
 
+    bool ArctosHardwareInterface::sendCheckedCanCommand(
+        uint16_t id, uint8_t cmd, const std::vector<uint8_t> &params, const char *label, int timeout_ms)
+    {
+        // Per MKS protocol used on this hardware: byte2==1 => success, 0 => fail.
+        const uint8_t status = can_driver_.sendCmdWithStatusSync(id, cmd, params, timeout_ms);
+        if (status != 0x01)
+        {
+            RCLCPP_ERROR(LOGGER, "CAN ID %u %s failed (cmd=0x%02X status=0x%02X).", id, label, cmd, status);
+            return false;
+        }
+        return true;
+    }
+
     bool ArctosHardwareInterface::configureCanId6Startup()
     {
         constexpr uint16_t kCanId = 6;
@@ -350,34 +374,11 @@ namespace arctos_hardware_interface
         }
 
         const int mstep = kDefaultMstep;
-        if (info_.hardware_parameters.find("mks_cfg_canid6_mstep") != info_.hardware_parameters.end())
-        {
-            RCLCPP_WARN(LOGGER, "Ignoring mks_cfg_canid6_mstep; forcing CAN ID %u mstep=%d.", kCanId, mstep);
-        }
         const int mode = std::clamp(getInt("mks_cfg_canid6_mode", kDefaultMode), 0, 5);
         const int ma = std::clamp(getInt("mks_cfg_canid6_ma", kDefaultMa), 0, 3000);
-        const bool protect_enable = getBool("mks_cfg_canid6_protect_enable", true);
+        const bool protect_enable = getBool("mks_cfg_canid6_protect_enable", false);
 
-        auto is_ok_status = [](uint8_t status) -> bool
-        {
-            // Per MKS protocol used on this hardware: byte2==1 => success, 0 => fail.
-            return status == 0x01;
-        };
-
-        auto send_cfg_cmd = [this, &is_ok_status](
-                                uint16_t id, uint8_t cmd, const std::vector<uint8_t> &params, const char *label) -> bool
-        {
-            const uint8_t status = can_driver_.sendCmdWithStatusSync(id, cmd, params, 150);
-            if (!is_ok_status(status))
-            {
-                RCLCPP_ERROR(LOGGER, "CAN ID %u %s failed (cmd=0x%02X status=0x%02X).", id, label, cmd, status);
-                return false;
-            }
-            RCLCPP_INFO(LOGGER, "CAN ID %u %s ok (cmd=0x%02X status=0x%02X).", id, label, cmd, status);
-            return true;
-        };
-
-        if (!send_cfg_cmd(
+        if (!sendCheckedCanCommand(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_SUBDIVISIONS,
                 {0x10}, // 16
@@ -387,7 +388,7 @@ namespace arctos_hardware_interface
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (!send_cfg_cmd(
+        if (!sendCheckedCanCommand(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_WORKING_MODE,
                 {static_cast<uint8_t>(mode)},
@@ -397,7 +398,7 @@ namespace arctos_hardware_interface
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (!send_cfg_cmd(
+        if (!sendCheckedCanCommand(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_ENABLE_SETTINGS,
                 {0x00},
@@ -407,7 +408,7 @@ namespace arctos_hardware_interface
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (!send_cfg_cmd(
+        if (!sendCheckedCanCommand(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_CURRENT,
                 {static_cast<uint8_t>((ma >> 8) & 0xFF), static_cast<uint8_t>(ma & 0xFF)},
@@ -417,27 +418,13 @@ namespace arctos_hardware_interface
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (protect_enable)
+        if (!sendCheckedCanCommand(
+                kCanId,
+                mks_servo_driver::CANCommands::SET_SHAFT_PROTECTION,
+                {0x00}, // disable
+                "Protection disable"))
         {
-            if (!send_cfg_cmd(
-                    kCanId,
-                    mks_servo_driver::CANCommands::ENABLE_SHAFT_PROTECTION,
-                    {0x00}, // disable
-                    "Protection enable"))
-            {
-                return false;
-            }
-        }
-        else
-        {
-            if (!send_cfg_cmd(
-                    kCanId,
-                    mks_servo_driver::CANCommands::RELEASE_SHAFT_PROTECTION,
-                    {},
-                    "Protection release"))
-            {
-                return false;
-            }
+            return false;
         }
 
         RCLCPP_INFO(LOGGER,
@@ -450,20 +437,40 @@ namespace arctos_hardware_interface
     CallbackReturn ArctosHardwareInterface::on_activate(const rclcpp_lifecycle::State &previous_state)
     {
         (void)previous_state;
+        constexpr int kStartupQueryTimeoutMs = 120;
+        constexpr int kStartupFreshnessMs = 250;
         RCLCPP_INFO(LOGGER, "Activating hardware and enabling motors...");
         // Enable all motors
         for (const auto &motor : motors_)
         {
-            if (!can_driver_.enableMotor(motor.can_id, true))
+            if (!sendCheckedCanCommand(
+                    motor.can_id,
+                    mks_servo_driver::CANCommands::ENABLE_MOTOR,
+                    {0x01},
+                    "Enable motor"))
             {
                 RCLCPP_ERROR(LOGGER,
                              "Failed to enable CAN ID: %d)", motor.can_id);
                 return CallbackReturn::ERROR;
             }
-            RCLCPP_INFO(LOGGER, "Motor enabled for CAN ID: %d", motor.can_id);
+        }
+        
+        RCLCPP_INFO(LOGGER, "All motors enabled.");
+
+        for (const auto &motor : motors_)
+        {
+            if (!can_driver_.queryPositionSync(motor.can_id, kStartupQueryTimeoutMs))
+            {
+                RCLCPP_ERROR(LOGGER, "Failed to get fresh startup position from CAN ID: %d", motor.can_id);
+                return CallbackReturn::ERROR;
+            }
+            if (!can_driver_.isPositionFresh(motor.can_id, kStartupFreshnessMs))
+            {
+                RCLCPP_ERROR(LOGGER, "Startup position for CAN ID %d is stale after sync query.", motor.can_id);
+                return CallbackReturn::ERROR;
+            }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         // Standard Joints (0-3)
         for (size_t i = 0; i < MAIN_JOINT_COUNT; ++i)
         {
@@ -473,7 +480,6 @@ namespace arctos_hardware_interface
             last_sent_command_[i] = rad; // Tells the Driver "No movement needed yet"
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         auto c5 = can_driver_.getPosition(motors_[B_IDX].can_id);
         auto c6 = can_driver_.getPosition(motors_[C_IDX].can_id);
 
@@ -569,11 +575,22 @@ namespace arctos_hardware_interface
 
     hw::return_type ArctosHardwareInterface::read(const rclcpp::Time &, const rclcpp::Duration &period)
     {
+        constexpr int kMaxPositionAgeMs = 200;
         const double dt = period.seconds();
         auto prev = position_states_;
 
         for (size_t i = 0; i < MAIN_JOINT_COUNT; ++i)
         {
+            if (!can_driver_.isPositionFresh(motors_[i].can_id, kMaxPositionAgeMs))
+            {
+                RCLCPP_WARN_THROTTLE(
+                    LOGGER, *this->get_clock(), 1000,
+                    "Stale encoder data for CAN ID %d (joint %s); holding last state.",
+                    motors_[i].can_id, motors_[i].name.c_str());
+                velocity_states_[i] = 0.0;
+                continue;
+            }
+
             int64_t encoder_counts = can_driver_.getPosition(motors_[i].can_id);
 
             double rad = countsToRadians(encoder_counts, motors_[i].gear_ratio);
@@ -586,25 +603,48 @@ namespace arctos_hardware_interface
             updateJointVelocity(i, prev[i], dt);
         }
 
-        const int64_t c5 = can_driver_.getPosition(motors_[B_IDX].can_id);
-        const int64_t c6 = can_driver_.getPosition(motors_[C_IDX].can_id);
-        (void)can_driver_.queryPosition(motors_[B_IDX].can_id);
-        (void)can_driver_.queryPosition(motors_[C_IDX].can_id);
-        double m5_u = countsToRadians(c5, motors_[B_IDX].gear_ratio);
-        double m6_u = countsToRadians(c6, motors_[C_IDX].gear_ratio) * M6_SIGN;
-
-        // zero-relative
-        if (wrist_zero_set_)
+        if (!can_driver_.isPositionFresh(motors_[B_IDX].can_id, kMaxPositionAgeMs) ||
+            !can_driver_.isPositionFresh(motors_[C_IDX].can_id, kMaxPositionAgeMs))
         {
-            m5_u -= m5_zero_;
-            m6_u -= m6_zero_;
+            RCLCPP_WARN_THROTTLE(
+                LOGGER, *this->get_clock(), 1000,
+                "Stale encoder data for wrist motors (CAN IDs %d/%d); holding last B/C state.",
+                motors_[B_IDX].can_id, motors_[C_IDX].can_id);
+            velocity_states_[B_IDX] = 0.0;
+            velocity_states_[C_IDX] = 0.0;
         }
+        else
+        {
+            const int64_t c5 = can_driver_.getPosition(motors_[B_IDX].can_id);
+            const int64_t c6 = can_driver_.getPosition(motors_[C_IDX].can_id);
+            (void)can_driver_.queryPosition(motors_[B_IDX].can_id);
+            (void)can_driver_.queryPosition(motors_[C_IDX].can_id);
+            double m5_u = countsToRadians(c5, motors_[B_IDX].gear_ratio);
+            double m6_u = countsToRadians(c6, motors_[C_IDX].gear_ratio) * M6_SIGN;
 
-        const WristJointState wrist_state = motorsToWristJoints(m5_u, m6_u, DIFF_GAIN);
-        position_states_[B_IDX] = std::clamp(wrist_state.b, motors_[B_IDX].min, motors_[B_IDX].max);
-        position_states_[C_IDX] = std::clamp(wrist_state.c, motors_[C_IDX].min, motors_[C_IDX].max);
-        updateJointVelocity(B_IDX, prev[B_IDX], dt);
-        updateJointVelocity(C_IDX, prev[C_IDX], dt);
+            // zero-relative
+            if (wrist_zero_set_)
+            {
+                m5_u -= m5_zero_;
+                m6_u -= m6_zero_;
+            }
+
+            const WristJointState wrist_state = motorsToWristJoints(m5_u, m6_u, DIFF_GAIN);
+            position_states_[B_IDX] = std::clamp(wrist_state.b, motors_[B_IDX].min, motors_[B_IDX].max);
+            position_states_[C_IDX] = std::clamp(wrist_state.c, motors_[C_IDX].min, motors_[C_IDX].max);
+            updateJointVelocity(B_IDX, prev[B_IDX], dt);
+            updateJointVelocity(C_IDX, prev[C_IDX], dt);
+
+            RCLCPP_INFO_THROTTLE(
+                LOGGER, *this->get_clock(), 500,
+                "FBK B=%.2f deg, C=%.2f deg, m5_u=%.2f deg, m6_u=%.2f deg, c5=%ld c6=%ld",
+                angles::to_degrees(position_states_[B_IDX]),
+                angles::to_degrees(position_states_[C_IDX]),
+                angles::to_degrees(m5_u),
+                angles::to_degrees(m6_u),
+                static_cast<long>(c5),
+                static_cast<long>(c6));
+        }
 
         // Gripper has no encoder: keep soft state synced to command
         gripper_pos_ = gripper_cmd_;
@@ -672,6 +712,8 @@ namespace arctos_hardware_interface
         if (std::abs(wrist_target.c5 - last_sent_counts_[B_IDX]) > WRIST_COUNT_EPS ||
             std::abs(wrist_target.c6 - last_sent_counts_[C_IDX]) > WRIST_COUNT_EPS)
         {
+            const int32_t dc5 = wrist_target.c5 - last_sent_counts_[B_IDX];
+            const int32_t dc6 = wrist_target.c6 - last_sent_counts_[C_IDX];
             double vb = velocity_commands_[B_IDX];
             double vc = velocity_commands_[C_IDX];
             if (!std::isfinite(vb))
@@ -712,10 +754,10 @@ namespace arctos_hardware_interface
             }
 
             RCLCPP_INFO_THROTTLE(LOGGER, *this->get_clock(), 500,
-                                 "J5=%.2f deg, J6=%.2f deg, m5_abs=%.2f deg, m6_abs=%.2f deg, c5=%d c6=%d",
+                                 "CMD B=%.2f deg, C=%.2f deg, m5_abs=%.2f deg, m6_abs=%.2f deg, c5=%d c6=%d, dc5=%d dc6=%d",
                                  angles::to_degrees(B), angles::to_degrees(C),
                                  angles::to_degrees(wrist_target.m5_abs), angles::to_degrees(wrist_target.m6_abs),
-                                 wrist_target.c5, wrist_target.c6);
+                                 wrist_target.c5, wrist_target.c6, dc5, dc6);
         }
 
         // ----- gripper (command-only CAN device, no encoder) -----

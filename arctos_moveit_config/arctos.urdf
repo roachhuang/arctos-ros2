@@ -288,21 +288,21 @@
     <axis xyz="1.0 -0.0 0.0"/>
     <limit effort="97.0" lower="-1.5707963267948966" upper="1.2217304763960306" velocity="1.4"/>
   </joint>
-  <joint name="A_joint" type="continuous">
+  <joint name="A_joint" type="revolute">
     <parent link="Link_3_1"/>
     <child link="Link_4_1"/>
     <origin rpy="0 0 0" xyz="0 -0.13881 0.0217651"/>
     <axis xyz="-0.0 1.0 -0.0"/>
     <limit effort="22.0" lower="-3.141592653589793" upper="3.141592653589793" velocity="4.4"/>
   </joint>
-  <joint name="B_joint" type="continuous">
+  <joint name="B_joint" type="revolute">
     <parent link="Link_4_1"/>
     <child link="Link_5_1"/>
     <origin rpy="0 0 0" xyz="0.0 -0.12543 -0.00184"/>
     <axis xyz="-1.0 -0.0 0.0"/>
     <limit effort="16.0" lower="-1.55" upper="1.55" velocity="3.0"/>
   </joint>
-  <joint name="C_joint" type="continuous">
+  <joint name="C_joint" type="revolute">
     <parent link="Link_5_1"/>
     <child link="Link_6_1"/>
     <origin rpy="0 0 0" xyz="0.0 -0.0398 0.0"/>
