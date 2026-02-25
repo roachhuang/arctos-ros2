@@ -36,6 +36,7 @@ namespace arctos_hardware_interface
   {
   public:
     static constexpr double M6_SIGN = -1.0;
+    static constexpr double WRIST_DIFF_GAIN = 0.5;
     // (counts per revolution for the encoder), step size = 2pi/16384 radians ~ 0.00038 rads
     static constexpr int ENCODER_COUNTS_PER_REVOLUTION = 16384;
 
@@ -133,6 +134,8 @@ namespace arctos_hardware_interface
 
     // Helper methods
     void loadHardwareParameters();
+    bool sendCheckedCanCommand(uint16_t id, uint8_t cmd, const std::vector<uint8_t> &params, const char *label, int timeout_ms = 150);
+    bool configureCanId6Startup();
 
     void updateJointVelocity(size_t joint_index, double prev_position, double dt);
 
