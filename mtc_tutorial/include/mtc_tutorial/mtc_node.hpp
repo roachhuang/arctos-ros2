@@ -69,16 +69,16 @@ public:
   static constexpr double GRIPPER_JAW_OFFSET_Y = -0.06;
 
   /// Object height (meters)
-  static constexpr double OBJECT_HEIGHT = 0.2;
+  static constexpr double OBJECT_HEIGHT = 0.3;
 
   /// Vertical offset of object from table (half cylinder height, meters)
   static constexpr double OBJECT_TABLE_HEIGHT = 0.14;
 
   // =========== PLANNING SCENE PARAMETERS ===========
   /// X position of pickup location (meters)
-  static constexpr double PICKUP_X = 0.32;
+  static constexpr double PICKUP_X = 0.30; //0.32;
   /// Y position of pickup location (meters)
-  static constexpr double PICKUP_Y = -0.36;
+  static constexpr double PICKUP_Y = -0.30; // -0.33; // -0.36;
   static constexpr double PICKUP_Z = 0.0;
 
   /// Minimum grasp sampling angle delta (radians)
@@ -86,10 +86,10 @@ public:
 
   // =========== PLACE PARAMETERS ===========
   /// X position of place location relative to object frame (meters)
-  static constexpr double PLACE_OFFSET_X = -0.65; // or 0
+  static constexpr double PLACE_OFFSET_X = -0.60; // -0.65; // or 0
 
   /// Y position of place location relative to object frame (meters)
-  static constexpr double PLACE_OFFSET_Y = -0.13;
+  static constexpr double PLACE_OFFSET_Y = 0; // -0.13;
 
 private:
   void detectedPoseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
@@ -107,6 +107,13 @@ private:
   bool use_detected_object_pose_{false};
   std::string detected_pose_topic_{"/detected_object_pose_stable"};
   double detection_wait_timeout_sec_{10.0};
+  std::string arm_group_name_{"arm"};
+  std::string gripper_group_name_{"gripper"};
+  std::string gripper_frame_{"Gripper_1"};
+  std::string world_frame_{"world"};
+  std::string gripper_open_pose_{"open"};
+  std::string gripper_close_pose_{"close"};
+  std::string arm_home_pose_{"home"};
 
   double pickup_x_{PICKUP_X};
   double pickup_y_{PICKUP_Y};

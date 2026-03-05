@@ -22,10 +22,43 @@ static const rclcpp::Logger LOGGER = rclcpp::get_logger("mtc_tutorial");
 MTCTaskNode::MTCTaskNode(const rclcpp::NodeOptions &options)
     : node_{std::make_shared<rclcpp::Node>("mtc_node", options)}
 {
-  use_detected_object_pose_ = node_->declare_parameter<bool>("use_detected_object_pose", false);
-  detected_pose_topic_ = node_->declare_parameter<std::string>(
-      "detected_pose_topic", "/detected_object_pose_stable");
-  detection_wait_timeout_sec_ = node_->declare_parameter<double>("detection_wait_timeout_sec", 10.0);
+  auto get_or_declare_bool = [this](const std::string &name, bool default_value) {
+    if (node_->has_parameter(name)) {
+      bool value = default_value;
+      (void)node_->get_parameter(name, value);
+      return value;
+    }
+    return node_->declare_parameter<bool>(name, default_value);
+  };
+
+  auto get_or_declare_string = [this](const std::string &name, const std::string &default_value) {
+    if (node_->has_parameter(name)) {
+      std::string value = default_value;
+      (void)node_->get_parameter(name, value);
+      return value;
+    }
+    return node_->declare_parameter<std::string>(name, default_value);
+  };
+
+  auto get_or_declare_double = [this](const std::string &name, double default_value) {
+    if (node_->has_parameter(name)) {
+      double value = default_value;
+      (void)node_->get_parameter(name, value);
+      return value;
+    }
+    return node_->declare_parameter<double>(name, default_value);
+  };
+
+  use_detected_object_pose_ = get_or_declare_bool("use_detected_object_pose", false);
+  detected_pose_topic_ = get_or_declare_string("detected_pose_topic", "/detected_object_pose_stable");
+  detection_wait_timeout_sec_ = get_or_declare_double("detection_wait_timeout_sec", 10.0);
+  arm_group_name_ = get_or_declare_string("arm_group_name", "arm");
+  gripper_group_name_ = get_or_declare_string("gripper_group_name", "gripper");
+  gripper_frame_ = get_or_declare_string("gripper_frame", "Gripper_1");
+  world_frame_ = get_or_declare_string("world_frame", "world");
+  gripper_open_pose_ = get_or_declare_string("gripper_open_pose", "open");
+  gripper_close_pose_ = get_or_declare_string("gripper_close_pose", "close");
+  arm_home_pose_ = get_or_declare_string("arm_home_pose", "home");
 
   if (use_detected_object_pose_) {
     detected_pose_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
@@ -53,7 +86,7 @@ void MTCTaskNode::setupPlanningScene()
 {
   moveit_msgs::msg::CollisionObject object;
   object.id = "object";
-  object.header.frame_id = "world";
+  object.header.frame_id = world_frame_;
   object.primitives.resize(1);
   object.primitives[0].type = shape_msgs::msg::SolidPrimitive::CYLINDER;
   // Use class constants instead of local constants
@@ -63,7 +96,7 @@ void MTCTaskNode::setupPlanningScene()
   pose.position.x = pickup_x_;
   pose.position.y = pickup_y_;
   // pose.position.z = OBJECT_TABLE_HEIGHT;
-  pose.position.z = pickup_z_ + OBJECT_HEIGHT / 2;
+  pose.position.z = pickup_z_ + OBJECT_HEIGHT*2/3;
   pose.orientation.w = 1.0;
   object.pose = pose;
 
@@ -162,9 +195,9 @@ mtc::Task MTCTaskNode::createTask()
   task.stages()->setName("demo task");
   task.loadRobotModel(node_);
 
-  const auto &arm_group_name = "arm";
-  const auto &hand_group_name = "gripper";
-  const auto &hand_frame = "Gripper_1";
+  const auto &arm_group_name = arm_group_name_;
+  const auto &hand_group_name = gripper_group_name_;
+  const auto &hand_frame = gripper_frame_;
 
   task.setProperty("group", arm_group_name);
   task.setProperty("eef", hand_group_name);
@@ -217,7 +250,7 @@ mtc::Task MTCTaskNode::createTask()
     // Apply to a stage
     stage_open_hand->properties().set("trajectory_execution_info", exec_info);
 
-    stage_open_hand->setGoal("open");
+    stage_open_hand->setGoal(gripper_open_pose_);
     task.add(std::move(stage_open_hand));
   }
 
@@ -295,7 +328,7 @@ mtc::Task MTCTaskNode::createTask()
       auto stage = std::make_unique<mtc::stages::GenerateGraspPose>("generate grasp pose");
       stage->properties().configureInitFrom(mtc::Stage::PARENT);
       stage->properties().set("marker_ns", "grasp_pose");
-      stage->setPreGraspPose("open");
+      stage->setPreGraspPose(gripper_open_pose_);
       stage->setObject("object");
 
       // Adaptive angle sampling based on object and gripper geometry
@@ -310,18 +343,16 @@ mtc::Task MTCTaskNode::createTask()
       // Apply to a stage
       stage->properties().set("trajectory_execution_info", exec_info);
 
-      // Grasp frame transform: rotate to point downward
-      Eigen::Isometry3d grasp_frame_transform;
+      auto wrapper =
+          std::make_unique<mtc::stages::ComputeIK>("grasp pose IK", std::move(stage));
+      wrapper->setMaxIKSolutions(32);
+      wrapper->setMinSolutionDistance(0.1);
+      Eigen::Isometry3d grasp_frame_transform = Eigen::Isometry3d::Identity();
       Eigen::Quaterniond q = Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitX()) *
                              Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitY()) *
                              Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitZ());
       grasp_frame_transform.linear() = q.matrix();
       grasp_frame_transform.translation().y() = GRIPPER_JAW_OFFSET_Y;
-
-      auto wrapper =
-          std::make_unique<mtc::stages::ComputeIK>("grasp pose IK", std::move(stage));
-      wrapper->setMaxIKSolutions(32);
-      wrapper->setMinSolutionDistance(0.1);
       wrapper->setIKFrame(grasp_frame_transform, hand_frame);
       wrapper->properties().configureInitFrom(mtc::Stage::PARENT, {"eef", "group"});
       wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, {"target_pose"});
@@ -336,6 +367,12 @@ mtc::Task MTCTaskNode::createTask()
       stage->allowCollisions("object",
                              task.getRobotModel()
                                  ->getJointModelGroup(hand_group_name)
+                                 ->getLinkModelNamesWithCollisionGeometry(),
+                             true);
+      // Keep grasp candidates where the long cylinder briefly intersects forearm links.
+      stage->allowCollisions("object",
+                             task.getRobotModel()
+                                 ->getJointModelGroup(arm_group_name)
                                  ->getLinkModelNamesWithCollisionGeometry(),
                              true);
       grasp->insert(std::move(stage));
@@ -355,7 +392,7 @@ mtc::Task MTCTaskNode::createTask()
       // Slow down gripper motion for smooth close
       stage->setProperty("max_velocity_scaling_factor", 0.05);
       stage->setProperty("max_acceleration_scaling_factor", 0.05);
-      stage->setGoal("close");
+      stage->setGoal(gripper_close_pose_);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
       grasp->insert(std::move(stage));
     }
@@ -384,7 +421,7 @@ mtc::Task MTCTaskNode::createTask()
       stage->properties().set("trajectory_execution_info", exec_info);
 
       geometry_msgs::msg::Vector3Stamped vec;
-      vec.header.frame_id = "world";
+      vec.header.frame_id = world_frame_;
       vec.vector.z = 1.0;
       stage->setDirection(vec);
       grasp->insert(std::move(stage));
@@ -429,8 +466,6 @@ mtc::Task MTCTaskNode::createTask()
       target_pose_msg.header.frame_id = "object";
       target_pose_msg.pose.position.x = PLACE_OFFSET_X;
       target_pose_msg.pose.position.y = PLACE_OFFSET_Y;
-
-      // Correct quaternion for 180° (flip) rotation around X-axis
       tf2::Quaternion q;
       q.setRotation(tf2::Vector3(1, 0, 0), M_PI);
       target_pose_msg.pose.orientation = tf2::toMsg(q);
@@ -462,20 +497,8 @@ mtc::Task MTCTaskNode::createTask()
       // Slow down gripper motion for smooth open
       stage->setProperty("max_velocity_scaling_factor", 0.05);
       stage->setProperty("max_acceleration_scaling_factor", 0.05);
-      stage->setGoal("open");
+      stage->setGoal(gripper_open_pose_);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-      place->insert(std::move(stage));
-    }
-
-    // Forbid hand-object collision
-    {
-      auto stage =
-          std::make_unique<mtc::stages::ModifyPlanningScene>("forbid collision (hand,object)");
-      stage->allowCollisions("object",
-                             task.getRobotModel()
-                                 ->getJointModelGroup(hand_group_name)
-                                 ->getLinkModelNamesWithCollisionGeometry(),
-                             false);
       place->insert(std::move(stage));
     }
 
@@ -509,6 +532,18 @@ mtc::Task MTCTaskNode::createTask()
       place->insert(std::move(stage));
     }
 
+    // Forbid hand-object collision after retreat to avoid filtering valid release states.
+    {
+      auto stage =
+          std::make_unique<mtc::stages::ModifyPlanningScene>("forbid collision (hand,object)");
+      stage->allowCollisions("object",
+                             task.getRobotModel()
+                                 ->getJointModelGroup(hand_group_name)
+                                 ->getLinkModelNamesWithCollisionGeometry(),
+                             false);
+      place->insert(std::move(stage));
+    }
+
     task.add(std::move(place));
   }
 
@@ -524,7 +559,7 @@ mtc::Task MTCTaskNode::createTask()
     stage->setProperty("max_velocity_scaling_factor", 0.2);
     stage->setProperty("max_acceleration_scaling_factor", 0.2);
     stage->setGroup(arm_group_name);
-    stage->setGoal("home");
+    stage->setGoal(arm_home_pose_);
     stage->setTimeout(15.0);
     task.add(std::move(stage));
   }

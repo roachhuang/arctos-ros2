@@ -1,14 +1,19 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
+from launch.substitutions import PathJoinSubstitution
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 from moveit_configs_utils import MoveItConfigsBuilder
 
 def generate_launch_description():
     moveit_cfg = MoveItConfigsBuilder(
         "arctos", package_name="arctos_moveit_config"
     ).to_dict()
+    mtc_params = PathJoinSubstitution(
+        [FindPackageShare("mtc_tutorial"), "config", "mtc_node_params.yaml"]
+    )
 
     use_detected_object_pose = LaunchConfiguration("use_detected_object_pose")
     detected_pose_topic = LaunchConfiguration("detected_pose_topic")
@@ -43,6 +48,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             moveit_cfg,
+            mtc_params,
             {
                 "use_detected_object_pose": use_detected_object_pose,
                 "detected_pose_topic": detected_pose_topic,

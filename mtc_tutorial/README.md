@@ -42,3 +42,14 @@ Confirm controller is actually executing timed trajectories:
 ros2 topic echo /arm_controller/controller_state --once | grep -n "time_from_start"
 ros2 action list | grep arm_controller
 ros2 param get /move_group trajectory_execution.allowed_execution_duration_scaling
+
+5 Mar 2026 - bugfix
+
+Fixed grasp pose IK zero-solution failures by restoring original jaw-centered IK frame logic for pick:
+Uses Gripper_1 + jaw-center offset + original orientation transform.
+Fixed place-orientation regression by restoring object-relative place IK frame:
+place pose IK now uses wrapper->setIKFrame("object") (original behavior).
+Fixed place-stage collision-order failure (forbid collision too early):
+Reordered place sub-stages so collision re-forbid happens after detach/retreat.
+Clarified object source-of-truth:
+Current object spawn position comes from pickup_x/y/z constants (or detection topic) in hpp, not object_pose in YAML.

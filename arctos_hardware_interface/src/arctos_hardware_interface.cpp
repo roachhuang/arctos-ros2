@@ -516,7 +516,7 @@ namespace arctos_hardware_interface
     {
         (void)previous_state;
         RCLCPP_INFO(LOGGER, "Deactivating hardware...");
-        can_driver_.deactive();
+        // can_driver_.deactive();
         closeGripperCanSocket();
         return CallbackReturn::SUCCESS;
     }
@@ -617,8 +617,6 @@ namespace arctos_hardware_interface
         {
             const int64_t c5 = can_driver_.getPosition(motors_[B_IDX].can_id);
             const int64_t c6 = can_driver_.getPosition(motors_[C_IDX].can_id);
-            (void)can_driver_.queryPosition(motors_[B_IDX].can_id);
-            (void)can_driver_.queryPosition(motors_[C_IDX].can_id);
             double m5_u = countsToRadians(c5, motors_[B_IDX].gear_ratio);
             double m6_u = countsToRadians(c6, motors_[C_IDX].gear_ratio) * M6_SIGN;
 
@@ -635,7 +633,7 @@ namespace arctos_hardware_interface
             updateJointVelocity(B_IDX, prev[B_IDX], dt);
             updateJointVelocity(C_IDX, prev[C_IDX], dt);
 
-            RCLCPP_INFO_THROTTLE(
+            RCLCPP_DEBUG_THROTTLE(
                 LOGGER, *this->get_clock(), 500,
                 "FBK B=%.2f deg, C=%.2f deg, m5_u=%.2f deg, m6_u=%.2f deg, c5=%ld c6=%ld",
                 angles::to_degrees(position_states_[B_IDX]),
@@ -753,7 +751,7 @@ namespace arctos_hardware_interface
                     ok5 ? 1 : 0, ok6 ? 1 : 0, rpm5, rpm6, wrist_target.c5, wrist_target.c6);
             }
 
-            RCLCPP_INFO_THROTTLE(LOGGER, *this->get_clock(), 500,
+            RCLCPP_DEBUG_THROTTLE(LOGGER, *this->get_clock(), 500,
                                  "CMD B=%.2f deg, C=%.2f deg, m5_abs=%.2f deg, m6_abs=%.2f deg, c5=%d c6=%d, dc5=%d dc6=%d",
                                  angles::to_degrees(B), angles::to_degrees(C),
                                  angles::to_degrees(wrist_target.m5_abs), angles::to_degrees(wrist_target.m6_abs),
