@@ -3,11 +3,41 @@
 
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
+
+
+def _maybe_include_kinect(context):
+    if LaunchConfiguration("use_kinect").perform(context).lower() not in ("1", "true", "yes", "on"):
+        return []
+
+    try:
+        kinect_share = get_package_share_directory("kinect_ros2")
+    except PackageNotFoundError:
+        return [
+            LogInfo(
+                msg=(
+                    "kinect_ros2 is not installed in the current environment; "
+                    "skipping Kinect launch. Build/source kinect_ros2 or pass use_kinect:=false."
+                )
+            )
+        ]
+
+    return [
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(
+                    kinect_share,
+                    "launch",
+                    "pointcloud.launch.py",
+                )
+            ),
+            condition=IfCondition(LaunchConfiguration("use_kinect")),
+        )
+    ]
 
 def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
@@ -15,8 +45,12 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     rviz_config = LaunchConfiguration("rviz_config")
     use_vision_guided_pick = LaunchConfiguration("use_vision_guided_pick")
+    use_pca_grasp = LaunchConfiguration("use_pca_grasp")
     vision_pick_execute = LaunchConfiguration("vision_pick_execute")
     vision_pick_object_pose_topic = LaunchConfiguration("vision_pick_object_pose_topic")
+    pca_pointcloud_topic = LaunchConfiguration("pca_pointcloud_topic")
+    pca_camera_optical_frame = LaunchConfiguration("pca_camera_optical_frame")
+    pca_approach_axis = LaunchConfiguration("pca_approach_axis")
     rgb_to_depth_x = LaunchConfiguration("rgb_to_depth_x")
     rgb_to_depth_y = LaunchConfiguration("rgb_to_depth_y")
     rgb_to_depth_z = LaunchConfiguration("rgb_to_depth_z")
@@ -63,8 +97,12 @@ def generate_launch_description():
             "use_sim_time": use_sim_time,
             "rviz_config": rviz_config,
             "use_vision_guided_pick": use_vision_guided_pick,
+            "use_pca_grasp": use_pca_grasp,
             "vision_pick_execute": vision_pick_execute,
             "vision_pick_object_pose_topic": vision_pick_object_pose_topic,
+            "pca_pointcloud_topic": pca_pointcloud_topic,
+            "pca_camera_optical_frame": pca_camera_optical_frame,
+            "pca_approach_axis": pca_approach_axis,
             # "static_tf_x": static_tf_x,
             # "static_tf_y": static_tf_y,
             # "static_tf_z": static_tf_z,
@@ -75,25 +113,18 @@ def generate_launch_description():
         }.items(),
     )
 
-    kinect_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory("kinect_ros2"),
-                "launch",
-                "showimage.launch.py",
-            )
-        ),
-        condition=IfCondition(use_kinect),
-    )
-
     return LaunchDescription(
         [
             DeclareLaunchArgument("use_rviz", default_value="true"),
             DeclareLaunchArgument("use_kinect", default_value="true"),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("use_vision_guided_pick", default_value="false"),
+            DeclareLaunchArgument("use_pca_grasp", default_value="false"),
             DeclareLaunchArgument("vision_pick_execute", default_value="false"),
             DeclareLaunchArgument("vision_pick_object_pose_topic", default_value="/detected_object_pose"),
+            DeclareLaunchArgument("pca_pointcloud_topic", default_value="/point_cloud"),
+            DeclareLaunchArgument("pca_camera_optical_frame", default_value="camera_rgb_optical_frame"),
+            DeclareLaunchArgument("pca_approach_axis", default_value="largest"),
             DeclareLaunchArgument(
                 "rviz_config",
                 default_value=os.path.join(
@@ -117,6 +148,6 @@ def generate_launch_description():
             DeclareLaunchArgument("rgb_to_depth_yaw", default_value="0.0"),
             camera_pose,
             moveit_launch,
-            kinect_launch,
+            OpaqueFunction(function=_maybe_include_kinect),
         ]
     )

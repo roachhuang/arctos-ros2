@@ -1,0 +1,10 @@
+moveit_runtime:
+  ros__parameters:
+    planning_pipeline: ompl
+    planning_time: 1.5
+    planning_attempts: 12
+    max_velocity_scaling_factor: 0.20
+    max_acceleration_scaling_factor: 0.20
+    stop_trajectory_velocity_tolerance: 0.02
+    stop_trajectory_acceleration_tolerance: 0.05
+    allowed_start_tolerance: 0.005

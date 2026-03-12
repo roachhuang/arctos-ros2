@@ -159,6 +159,8 @@ namespace arctos_hardware_interface
             return CallbackReturn::ERROR;
         }
         RCLCPP_INFO(LOGGER, "CAN driver connected on %s.", can_interface_.c_str());
+        constexpr int kCanDriverWarmupMs = 150;
+        std::this_thread::sleep_for(std::chrono::milliseconds(kCanDriverWarmupMs));
 
         RCLCPP_INFO(LOGGER, "Applying CAN ID 6 startup config...");
         if (!configureCanId6Startup())
@@ -204,6 +206,22 @@ namespace arctos_hardware_interface
             {
                 gripper_close_pos_ = std::stod(info_.hardware_parameters.at("gripper_close_position"));
                 gripper_limits_from_hw = true;
+            }
+            if (info_.hardware_parameters.count("wrist_pitch_to_roll_gain") > 0)
+            {
+                wrist_pitch_to_roll_gain_ = std::stod(info_.hardware_parameters.at("wrist_pitch_to_roll_gain"));
+            }
+            if (info_.hardware_parameters.count("wrist_roll_to_pitch_gain") > 0)
+            {
+                wrist_roll_to_pitch_gain_ = std::stod(info_.hardware_parameters.at("wrist_roll_to_pitch_gain"));
+            }
+            if (info_.hardware_parameters.count("wrist_b_feedback_gain") > 0)
+            {
+                wrist_b_feedback_gain_ = std::stod(info_.hardware_parameters.at("wrist_b_feedback_gain"));
+            }
+            if (info_.hardware_parameters.count("wrist_c_feedback_gain") > 0)
+            {
+                wrist_c_feedback_gain_ = std::stod(info_.hardware_parameters.at("wrist_c_feedback_gain"));
             }
         }
         catch (const std::exception &e)
@@ -327,6 +345,9 @@ namespace arctos_hardware_interface
         constexpr int kDefaultMode = static_cast<int>(mks_servo_driver::MotorMode::SR_vFOC);
         constexpr int kDefaultMa = 1600;
         constexpr int kCommandGapMs = 20;
+        constexpr int kCommandTimeoutMs = 400;
+        constexpr int kCommandRetryCount = 3;
+        constexpr int kRetryGapMs = 75;
 
         auto parseBool = [](const std::string &value, bool default_v) -> bool
         {
@@ -377,8 +398,32 @@ namespace arctos_hardware_interface
         const int mode = std::clamp(getInt("mks_cfg_canid6_mode", kDefaultMode), 0, 5);
         const int ma = std::clamp(getInt("mks_cfg_canid6_ma", kDefaultMa), 0, 3000);
         const bool protect_enable = getBool("mks_cfg_canid6_protect_enable", false);
+        const auto enableCmdPayload = static_cast<uint8_t>(protect_enable ? 0x01 : 0x00);
 
-        if (!sendCheckedCanCommand(
+        auto sendStartupCmd = [&](uint16_t id,
+                                  uint8_t cmd,
+                                  const std::vector<uint8_t> &params,
+                                  const char *label) -> bool
+        {
+            for (int attempt = 1; attempt <= kCommandRetryCount; ++attempt)
+            {
+                if (sendCheckedCanCommand(id, cmd, params, label, kCommandTimeoutMs))
+                {
+                    return true;
+                }
+
+                RCLCPP_WARN(LOGGER,
+                            "CAN ID %u startup %s retry %d/%d failed, retrying after %d ms",
+                            kCanId, label, attempt, kCommandRetryCount, kRetryGapMs);
+                if (attempt < kCommandRetryCount)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(kRetryGapMs));
+                }
+            }
+            return false;
+        };
+
+        if (!sendStartupCmd(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_SUBDIVISIONS,
                 {0x10}, // 16
@@ -388,7 +433,7 @@ namespace arctos_hardware_interface
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (!sendCheckedCanCommand(
+        if (!sendStartupCmd(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_WORKING_MODE,
                 {static_cast<uint8_t>(mode)},
@@ -398,7 +443,7 @@ namespace arctos_hardware_interface
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (!sendCheckedCanCommand(
+        if (!sendStartupCmd(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_ENABLE_SETTINGS,
                 {0x00},
@@ -408,7 +453,7 @@ namespace arctos_hardware_interface
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (!sendCheckedCanCommand(
+        if (!sendStartupCmd(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_CURRENT,
                 {static_cast<uint8_t>((ma >> 8) & 0xFF), static_cast<uint8_t>(ma & 0xFF)},
@@ -418,11 +463,11 @@ namespace arctos_hardware_interface
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (!sendCheckedCanCommand(
+        if (!sendStartupCmd(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_SHAFT_PROTECTION,
-                {0x00}, // disable
-                "Protection disable"))
+                {enableCmdPayload},
+                protect_enable ? "Protection enable" : "Protection disable"))
         {
             return false;
         }
@@ -578,6 +623,8 @@ namespace arctos_hardware_interface
         constexpr int kMaxPositionAgeMs = 200;
         const double dt = period.seconds();
         auto prev = position_states_;
+        const int64_t wrist_c5 = can_driver_.getPosition(motors_[B_IDX].can_id);
+        const int64_t wrist_c6 = can_driver_.getPosition(motors_[C_IDX].can_id);
 
         for (size_t i = 0; i < MAIN_JOINT_COUNT; ++i)
         {
@@ -615,10 +662,8 @@ namespace arctos_hardware_interface
         }
         else
         {
-            const int64_t c5 = can_driver_.getPosition(motors_[B_IDX].can_id);
-            const int64_t c6 = can_driver_.getPosition(motors_[C_IDX].can_id);
-            double m5_u = countsToRadians(c5, motors_[B_IDX].gear_ratio);
-            double m6_u = countsToRadians(c6, motors_[C_IDX].gear_ratio) * M6_SIGN;
+            double m5_u = countsToRadians(wrist_c5, motors_[B_IDX].gear_ratio);
+            double m6_u = countsToRadians(wrist_c6, motors_[C_IDX].gear_ratio) * M6_SIGN;
 
             // zero-relative
             if (wrist_zero_set_)
@@ -640,8 +685,8 @@ namespace arctos_hardware_interface
                 angles::to_degrees(position_states_[C_IDX]),
                 angles::to_degrees(m5_u),
                 angles::to_degrees(m6_u),
-                static_cast<long>(c5),
-                static_cast<long>(c6));
+                static_cast<long>(wrist_c5),
+                static_cast<long>(wrist_c6));
         }
 
         // Gripper has no encoder: keep soft state synced to command
@@ -701,10 +746,27 @@ namespace arctos_hardware_interface
         const double B = std::clamp(position_commands_[B_IDX], motors_[B_IDX].min + B_EPS, motors_[B_IDX].max - B_EPS);
         const double C = std::clamp(position_commands_[C_IDX], motors_[C_IDX].min, motors_[C_IDX].max);
 
+        const double b_err = position_states_[B_IDX] - B;
+        const double c_err = position_states_[C_IDX] - C;
+
+        const double B_decoupled = B
+                                   - wrist_roll_to_pitch_gain_ * C
+                                   - wrist_b_feedback_gain_ * b_err;
+        const double C_decoupled = C
+                                   - wrist_pitch_to_roll_gain_ * B
+                                   - wrist_c_feedback_gain_ * c_err;
+
+        const double B_corr = std::clamp(B_decoupled,
+                                         motors_[B_IDX].min + B_EPS,
+                                         motors_[B_IDX].max - B_EPS);
+        const double C_corr = std::clamp(C_decoupled,
+                                         motors_[C_IDX].min,
+                                         motors_[C_IDX].max);
+
         if (!wrist_zero_set_)
             return hw::return_type::OK;
         const WristMotorState wrist_target = wristJointsToMotors(
-            B, C, m5_zero_, m6_zero_, DIFF_GAIN, M6_SIGN,
+            B_corr, C_corr, m5_zero_, m6_zero_, DIFF_GAIN, M6_SIGN,
             *this, motors_[B_IDX].gear_ratio, motors_[C_IDX].gear_ratio);
 
         if (std::abs(wrist_target.c5 - last_sent_counts_[B_IDX]) > WRIST_COUNT_EPS ||
@@ -753,7 +815,7 @@ namespace arctos_hardware_interface
 
             RCLCPP_DEBUG_THROTTLE(LOGGER, *this->get_clock(), 500,
                                  "CMD B=%.2f deg, C=%.2f deg, m5_abs=%.2f deg, m6_abs=%.2f deg, c5=%d c6=%d, dc5=%d dc6=%d",
-                                 angles::to_degrees(B), angles::to_degrees(C),
+                                 angles::to_degrees(B_corr), angles::to_degrees(C_corr),
                                  angles::to_degrees(wrist_target.m5_abs), angles::to_degrees(wrist_target.m6_abs),
                                  wrist_target.c5, wrist_target.c6, dc5, dc6);
         }

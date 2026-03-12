@@ -1,4 +1,5 @@
 import os
+import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
@@ -9,6 +10,14 @@ from moveit_configs_utils import MoveItConfigsBuilder
 from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
+    sensors_3d_config = os.path.join(
+        get_package_share_directory("arctos_moveit_config"),
+        "config",
+        "sensors_3d.yaml",
+    )
+    with open(sensors_3d_config, "r", encoding="utf-8") as f:
+        sensors_3d_params = yaml.safe_load(f)
+
     # 1. 初始化配置 (確保載入了 URDF, SRDF, Kinematics)
     moveit_config = (
         MoveItConfigsBuilder(robot_name="arctos", package_name="arctos_moveit_config")
@@ -18,9 +27,8 @@ def generate_launch_description():
         .robot_description_kinematics(file_path="config/kinematics.yaml")
         .planning_pipelines(
             default_planning_pipeline="ompl",
-            pipelines=["ompl", "pilz_industrial_motion_planner"],
+            pipelines=["ompl"],
         )
-        .pilz_cartesian_limits(file_path="config/pilz_cartesian_limits.yaml")
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
         .planning_scene_monitor()
         .to_moveit_configs()
@@ -41,8 +49,12 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     rviz_config = LaunchConfiguration("rviz_config")
     use_vision_guided_pick = LaunchConfiguration("use_vision_guided_pick")
+    use_pca_grasp = LaunchConfiguration("use_pca_grasp")
     vision_pick_execute = LaunchConfiguration("vision_pick_execute")
     vision_pick_object_pose_topic = LaunchConfiguration("vision_pick_object_pose_topic")
+    pca_pointcloud_topic = LaunchConfiguration("pca_pointcloud_topic")
+    pca_camera_optical_frame = LaunchConfiguration("pca_camera_optical_frame")
+    pca_approach_axis = LaunchConfiguration("pca_approach_axis")
     # 3. 定義 move_group 節點
     move_group_node = Node(
         package="moveit_ros_move_group",
@@ -50,6 +62,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             moveit_config.to_dict(),
+            sensors_3d_params,
             # Mandatory for MTC
             {"capabilities": "move_group/ExecuteTaskSolutionCapability"},
             {"use_sim_time": False},
@@ -120,6 +133,21 @@ def generate_launch_description():
         ],
     )
 
+    pca_grasp_node = Node(
+        package="arctos_bringup",
+        executable="pca_grasp_node.py",
+        name="pca_grasp_node",
+        output="screen",
+        condition=IfCondition(use_pca_grasp),
+        parameters=[
+            {"use_sim_time": False},
+            {"target_frame": "base_link"},
+            {"pointcloud_topic": pca_pointcloud_topic},
+            {"camera_optical_frame": pca_camera_optical_frame},
+            {"approach_axis": pca_approach_axis},
+        ],
+    )
+
     return LaunchDescription([
         # DeclareLaunchArgument("static_tf_x", default_value="0.5"),
         # DeclareLaunchArgument("static_tf_y", default_value="0.0"),
@@ -130,8 +158,12 @@ def generate_launch_description():
         # DeclareLaunchArgument("static_tf_qw", default_value="1.0"),
         DeclareLaunchArgument("use_rviz", default_value="true"),
         DeclareLaunchArgument("use_vision_guided_pick", default_value="false"),
+        DeclareLaunchArgument("use_pca_grasp", default_value="false"),
         DeclareLaunchArgument("vision_pick_execute", default_value="false"),
         DeclareLaunchArgument("vision_pick_object_pose_topic", default_value="/detected_object_pose"),
+        DeclareLaunchArgument("pca_pointcloud_topic", default_value="/point_cloud"),
+        DeclareLaunchArgument("pca_camera_optical_frame", default_value="camera_rgb_optical_frame"),
+        DeclareLaunchArgument("pca_approach_axis", default_value="largest"),
         DeclareLaunchArgument(
             "rviz_config",
             default_value=os.path.join(
@@ -145,4 +177,5 @@ def generate_launch_description():
         move_group_node,
         rviz_node,
         vision_guided_pick_node,
+        pca_grasp_node,
     ])

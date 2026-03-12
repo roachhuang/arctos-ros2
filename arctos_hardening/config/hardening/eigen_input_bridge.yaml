@@ -1,0 +1,8 @@
+/arctos/eigen_input_bridge_node:
+  ros__parameters:
+    source_topic: /arctos/eigen/source_matrix
+    output_topic: /arctos/hardening/eigen/input_cov
+    matrix_size: 6
+    enable_fallback_from_eigendecomp: true
+    values_topic: /arctos/eigen/values
+    vectors_topic: /arctos/eigen/vectors

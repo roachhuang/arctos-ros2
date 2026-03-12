@@ -4,7 +4,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution, PythonExpression
 
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -134,8 +134,12 @@ def generate_launch_description():
     # Optional reactive pick pipeline (separate from MTC flow).
     # Keep this disabled for the default minimal runtime path.
     use_vision_guided_pick = LaunchConfiguration("use_vision_guided_pick")
+    use_pca_grasp = LaunchConfiguration("use_pca_grasp")
     vision_pick_execute = LaunchConfiguration("vision_pick_execute")
     vision_pick_object_pose_topic = LaunchConfiguration("vision_pick_object_pose_topic")
+    pca_pointcloud_topic = LaunchConfiguration("pca_pointcloud_topic")
+    pca_camera_optical_frame = LaunchConfiguration("pca_camera_optical_frame")
+    pca_approach_axis = LaunchConfiguration("pca_approach_axis")
     rviz_config = LaunchConfiguration("rviz_config")
     rgb_to_depth_x = LaunchConfiguration("rgb_to_depth_x")
     rgb_to_depth_y = LaunchConfiguration("rgb_to_depth_y")
@@ -143,6 +147,22 @@ def generate_launch_description():
     rgb_to_depth_roll = LaunchConfiguration("rgb_to_depth_roll")
     rgb_to_depth_pitch = LaunchConfiguration("rgb_to_depth_pitch")
     rgb_to_depth_yaw = LaunchConfiguration("rgb_to_depth_yaw")
+    default_rviz_config = PythonExpression([
+        '"',
+        os.path.join(
+            get_package_share_directory("arctos_moveit_config"),
+            "config/rviz",
+        ),
+        '/moveit_basic.rviz" if "',
+        use_kinect,
+        '" == "false" else "',
+        os.path.join(
+            get_package_share_directory("arctos_moveit_config"),
+            "config/rviz",
+            "moveit_pointcloud.rviz",
+        ),
+        '"',
+    ])
 
     # --- MoveIt (NO URDF INJECTION) ---
     move_group = IncludeLaunchDescription(
@@ -158,8 +178,12 @@ def generate_launch_description():
             "use_rviz": use_rviz,
             "use_kinect": use_kinect,
             "use_vision_guided_pick": use_vision_guided_pick,
+            "use_pca_grasp": use_pca_grasp,
             "vision_pick_execute": vision_pick_execute,
             "vision_pick_object_pose_topic": vision_pick_object_pose_topic,
+            "pca_pointcloud_topic": pca_pointcloud_topic,
+            "pca_camera_optical_frame": pca_camera_optical_frame,
+            "pca_approach_axis": pca_approach_axis,
             "rviz_config": rviz_config,
             "rgb_to_depth_x": rgb_to_depth_x,
             "rgb_to_depth_y": rgb_to_depth_y,
@@ -187,15 +211,15 @@ def generate_launch_description():
         DeclareLaunchArgument("use_rviz", default_value="true"),
         DeclareLaunchArgument("use_kinect", default_value="true"),
         DeclareLaunchArgument("use_vision_guided_pick", default_value="false"),
+        DeclareLaunchArgument("use_pca_grasp", default_value="false"),
         DeclareLaunchArgument("vision_pick_execute", default_value="false"),
         DeclareLaunchArgument("vision_pick_object_pose_topic", default_value="/detected_object_pose"),
+        DeclareLaunchArgument("pca_pointcloud_topic", default_value="/point_cloud"),
+        DeclareLaunchArgument("pca_camera_optical_frame", default_value="camera_rgb_optical_frame"),
+        DeclareLaunchArgument("pca_approach_axis", default_value="largest"),
         DeclareLaunchArgument(
             "rviz_config",
-            default_value=os.path.join(
-                get_package_share_directory("arctos_moveit_config"),
-                "config",
-                "moveit_safe.rviz",
-            ),
+            default_value=default_rviz_config,
             description="RViz config file path for MoveIt RViz instance",
         ),
         DeclareLaunchArgument(

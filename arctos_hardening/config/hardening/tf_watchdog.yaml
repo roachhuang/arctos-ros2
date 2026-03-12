@@ -1,0 +1,6 @@
+tf_watchdog:
+  ros__parameters:
+    required_frames: ['world', 'tool0']
+    warning_age_s: 0.10
+    error_age_s: 0.30
+    required_update_hz: 10.0

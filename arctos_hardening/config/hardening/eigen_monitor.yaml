@@ -1,0 +1,13 @@
+/arctos/eigen_monitor_node:
+  ros__parameters:
+    source_topic: /arctos/hardening/eigen/input_cov
+    matrix_size: 6
+    window_size: 1
+    eps_jitter: 1.0e-6
+    min_eig_warning: 1.0e-6
+    max_condition_number: 1.0e4
+    dominant_ratio_warn: 0.85
+    values_topic: /arctos/eigen/values
+    vectors_topic: /arctos/eigen/vectors
+    diagnostic_topic: /arctos/hardening/eigen
+    ok_topic: /arctos/hardening/eigen_ok

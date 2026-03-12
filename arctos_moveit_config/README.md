@@ -80,13 +80,6 @@ camera calibration:
     ost.yaml will be created.
 
     extrinsic calibration:
-        source /opt/ros/jazzy/setup.bash
-        source /home/roach/ros2_ws/install/local_setup.bash
-
-        ros2 launch easy_handeye2 calibrate.launch.py \
-        calibration_type:=eye_on_base \
-        name:=arctos_kinect_eob \
-        robot_base_frame:=base_link \
-        robot_effector_frame:=Gripper_1 \
-        tracking_base_frame:=kinect_rgb \
-        tracking_marker_frame:=gripper_tag
+        `easy_handeye2` has been removed from this workspace. Use the current
+        calibration workflow instead of the deprecated `ros2 launch easy_handeye2 ...`
+        flow that was previously documented here.

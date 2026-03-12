@@ -1,0 +1,6 @@
+/arctos/trajectory_guard_node:
+  ros__parameters:
+    source_action: /arm_controller/follow_joint_trajectory
+    relay_action: /arm_controller/hardening/follow_joint_trajectory
+    safety_topic: /arctos/hardening/ok_to_execute
+    require_safety: true

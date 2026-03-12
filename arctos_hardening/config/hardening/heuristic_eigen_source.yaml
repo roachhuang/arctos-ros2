@@ -1,0 +1,20 @@
+/arctos/heuristic_eigen_source_node:
+  ros__parameters:
+    output_topic: /arctos/eigen/source_matrix
+    matrix_size: 6
+    publish_hz: 50.0
+    joint_names: [A_joint, B_joint, C_joint, X_joint, Y_joint, Z_joint]
+    pd_p_gains: [40.0, 40.0, 40.0, 20.0, 20.0, 20.0]
+    pd_d_gains: [2.0, 2.0, 2.0, 1.0, 1.0, 1.0]
+    joint_weight: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    source_joint_states_topic: /joint_states
+    source_dynamic_joint_states_topic: /dynamic_joint_states
+    source_timeout_s: 0.5
+    publish_when_missing: true
+    fallback_identity_scale: 0.0
+    min_joint_stiffness: 0.02
+    max_joint_stiffness: 8.0
+    gain_scale: 0.001
+    vel_scale: 0.15
+    eff_scale: 0.01
+    smooth_alpha: 0.25

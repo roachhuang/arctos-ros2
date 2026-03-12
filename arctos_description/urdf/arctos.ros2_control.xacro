@@ -46,6 +46,10 @@
           <!-- Swap to invert gripper direction (easiest way) -->
           <param name="gripper_open_position">${gripper_limit_u}</param>
           <param name="gripper_close_position">${gripper_limit_l}</param>
+          <param name="wrist_pitch_to_roll_gain">0.0</param>
+          <param name="wrist_roll_to_pitch_gain">0.0</param>
+          <param name="wrist_b_feedback_gain">0.0</param>
+          <param name="wrist_c_feedback_gain">0.0</param>
           <!-- <param name="accel">20</param> -->
           <!-- <param name="vel">500</param> -->
         </xacro:unless>

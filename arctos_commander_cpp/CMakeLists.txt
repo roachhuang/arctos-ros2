@@ -7,13 +7,16 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(Eigen3 REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(example_interfaces REQUIRED)
 find_package(arctos_interfaces REQUIRED)
 
@@ -61,11 +64,21 @@ ament_target_dependencies(vision_guided_pick
   tf2_geometry_msgs
 )
 
+add_executable(pca_grasp_node src/pca_grasp_node.cpp)
+ament_target_dependencies(pca_grasp_node
+  rclcpp
+  geometry_msgs
+  sensor_msgs
+  visualization_msgs
+)
+target_link_libraries(pca_grasp_node Eigen3::Eigen)
+
 install(TARGETS   
   test_moveit
   commander
   point_and_inspect
   vision_guided_pick
+  pca_grasp_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

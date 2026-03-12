@@ -131,6 +131,12 @@ namespace arctos_hardware_interface
     bool gripper_can_enabled_{false};
     int gripper_last_raw_{-1}; // -1 unknown, 0-255 last sent position
 
+    // Gripper wrist decoupling gains.
+    double wrist_pitch_to_roll_gain_{0.0};
+    double wrist_roll_to_pitch_gain_{0.0};
+    double wrist_b_feedback_gain_{0.0};
+    double wrist_c_feedback_gain_{0.0};
+
 
     // Helper methods
     void loadHardwareParameters();

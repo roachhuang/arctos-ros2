@@ -1,3 +1,21 @@
+make my_moveit.launch.py default use_kinect:=false
+make my_moveit.launch.py default use_kinect:=true  
+
+PCA:
+  ros2 launch arctos_bringup my_moveit.launch.py \
+  use_kinect:=true \
+  use_pca_grasp:=true \
+  pca_pointcloud_topic:=/kinect/points \
+  pca_camera_optical_frame:=kinect_depth
+
+If using base_link as reference, try the Kinect around:
+x = 0.6 to 0.9 m in front of object area
+z = 0.7 to 1.0 m
+y = +/- 0.2 to 0.4 m side offset
+downward pitch -35 to -45 deg
+
+
+
 arctos_bringup/bringup.launch.py
 │
 ├── description.launch.py

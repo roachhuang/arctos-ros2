@@ -297,3 +297,10 @@ ros2 launch mtc_tutorial pick_place_demo.launch.py \
   stable_position_tolerance:=0.02 \
   stable_timeout_sec:=1.0 \
   detection_wait_timeout_sec:=10.0
+
+pca (point cloud) for grasp:
+
+ros2 launch arctos_moveit_config perception_stack.launch.py use_pca_grasp:=true pca_approach_axis:=smallest
+
+
+

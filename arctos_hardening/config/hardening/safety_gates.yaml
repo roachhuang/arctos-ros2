@@ -1,0 +1,23 @@
+/arctos/safety_watchdog_node:
+  ros__parameters:
+    base_frame: base_link
+    required_frames: [tool_link]
+    warning_age_s: 0.10
+    error_age_s: 0.30
+    required_update_hz: 10.0
+    watchdog_period_ms: 50.0
+
+    joint_state_topic: /joint_states
+    plan_status_topic: /moveit/planning_result
+    execution_error_topic: /arctos/execution/error
+    require_execution_error: false
+    ok_to_execute_topic: /arctos/hardening/ok_to_execute
+    diagnostic_topic: /arctos/hardening/safety
+
+    planning_fail_warn_count: 2
+    planning_fail_error_count: 5
+    max_execution_error: 0.08
+
+    joint_limit_margin_rad: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
+    joint_lower_limits: [-3.14, -1.5, -2.2, -2.2, -1.8, -3.14]
+    joint_upper_limits: [ 3.14,  1.5,  2.2,  2.2,  1.8,  3.14]

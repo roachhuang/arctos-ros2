@@ -59,6 +59,9 @@ MTCTaskNode::MTCTaskNode(const rclcpp::NodeOptions &options)
   gripper_open_pose_ = get_or_declare_string("gripper_open_pose", "open");
   gripper_close_pose_ = get_or_declare_string("gripper_close_pose", "close");
   arm_home_pose_ = get_or_declare_string("arm_home_pose", "home");
+  pickup_x_ = get_or_declare_double("pickup_x", pickup_x_);
+  pickup_y_ = get_or_declare_double("pickup_y", pickup_y_);
+  pickup_z_ = get_or_declare_double("pickup_z", pickup_z_);
 
   if (use_detected_object_pose_) {
     detected_pose_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
@@ -390,8 +393,8 @@ mtc::Task MTCTaskNode::createTask()
 
       stage->setGroup(hand_group_name);
       // Slow down gripper motion for smooth close
-      stage->setProperty("max_velocity_scaling_factor", 0.05);
-      stage->setProperty("max_acceleration_scaling_factor", 0.05);
+      stage->setProperty("max_velocity_scaling_factor", 0.02);
+      stage->setProperty("max_acceleration_scaling_factor", 0.02);
       stage->setGoal(gripper_close_pose_);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
       grasp->insert(std::move(stage));
