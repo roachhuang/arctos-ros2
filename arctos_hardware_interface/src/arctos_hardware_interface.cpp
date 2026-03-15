@@ -162,13 +162,13 @@ namespace arctos_hardware_interface
         constexpr int kCanDriverWarmupMs = 150;
         std::this_thread::sleep_for(std::chrono::milliseconds(kCanDriverWarmupMs));
 
-        RCLCPP_INFO(LOGGER, "Applying CAN ID 6 startup config...");
-        if (!configureCanId6Startup())
-        {
-            RCLCPP_FATAL(LOGGER, "Failed to send MKS startup config for CAN ID 6.");
-            return CallbackReturn::ERROR;
-        }
-        RCLCPP_INFO(LOGGER, "CAN ID 6 startup config complete.");
+        // RCLCPP_INFO(LOGGER, "Applying CAN ID 6 startup config...");
+        // if (!configureCanId6Startup())
+        // {
+        //     RCLCPP_FATAL(LOGGER, "Failed to send MKS startup config for CAN ID 6.");
+        //     return CallbackReturn::ERROR;
+        // }
+        // RCLCPP_INFO(LOGGER, "CAN ID 6 startup config complete.");
 
         RCLCPP_INFO(LOGGER, "Opening gripper CAN socket...");
         gripper_can_enabled_ = openGripperCanSocket();
