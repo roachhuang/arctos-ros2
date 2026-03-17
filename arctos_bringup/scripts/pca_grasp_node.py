@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import math
+from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
@@ -13,6 +14,15 @@ from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2 as pc2
 from tf2_ros import Buffer, TransformException, TransformListener
 from visualization_msgs.msg import Marker, MarkerArray
+
+
+@dataclass(frozen=True)
+class MarkerStyle:
+    axis_length: float
+    axis_width: float
+    axis_head_width: float
+    axis_head_length: float
+    center_scale: float
 
 
 def quaternion_to_rotation_matrix(x: float, y: float, z: float, w: float) -> np.ndarray:
@@ -80,18 +90,29 @@ class PCAGraspNode(Node):
 
         self.pointcloud_topic = self.declare_parameter("pointcloud_topic", "/point_cloud").value
         self.target_frame = self.declare_parameter("target_frame", "base_link").value
+        self.camera_optical_frame = self.declare_parameter(
+            "camera_optical_frame", "camera_rgb_optical_frame"
+        ).value
+
         self.min_points = int(self.declare_parameter("min_points", 120).value)
-        self.grasp_offset_x = float(self.declare_parameter("grasp_offset_x", 0.0).value)
-        self.grasp_offset_y = float(self.declare_parameter("grasp_offset_y", 0.0).value)
-        self.grasp_offset_z = float(self.declare_parameter("grasp_offset_z", 0.0).value)
-        approach_axis_mode = self.declare_parameter("approach_axis", "largest").value
         self.approach_offset = float(self.declare_parameter("approach_offset", -0.12).value)
-        self.axis_length = float(self.declare_parameter("axis_length", 0.10).value)
-        self.axis_width = float(self.declare_parameter("axis_width", 0.006).value)
-        self.axis_head_width = float(self.declare_parameter("axis_head_width", 0.012).value)
-        self.axis_head_length = float(self.declare_parameter("axis_head_length", 0.02).value)
-        self.center_marker_scale = float(self.declare_parameter("center_marker_scale", 0.01).value)
-        self.camera_optical_frame = self.declare_parameter("camera_optical_frame", "camera_rgb_optical_frame").value
+        self.grasp_offset = np.array(
+            [
+                float(self.declare_parameter("grasp_offset_x", 0.0).value),
+                float(self.declare_parameter("grasp_offset_y", 0.0).value),
+                float(self.declare_parameter("grasp_offset_z", 0.0).value),
+            ],
+            dtype=float,
+        )
+
+        self.marker_style = MarkerStyle(
+            axis_length=float(self.declare_parameter("axis_length", 0.10).value),
+            axis_width=float(self.declare_parameter("axis_width", 0.006).value),
+            axis_head_width=float(self.declare_parameter("axis_head_width", 0.012).value),
+            axis_head_length=float(self.declare_parameter("axis_head_length", 0.02).value),
+            center_scale=float(self.declare_parameter("center_marker_scale", 0.01).value),
+        )
+        approach_axis_mode = self.declare_parameter("approach_axis", "largest").value
 
         self.grasp_pub = self.create_publisher(PoseStamped, "/pca_grasp/grasp_pose", 10)
         self.marker_pub = self.create_publisher(MarkerArray, "/pca_grasp/axis_markers", 10)
@@ -122,59 +143,83 @@ class PCAGraspNode(Node):
         self.busy = True
 
         try:
-            cloud_arr = pc2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True)
-            if cloud_arr.size == 0:
-                pts = np.empty((0, 3), dtype=float)
-            else:
-                pts = np.column_stack((cloud_arr["x"], cloud_arr["y"], cloud_arr["z"])).astype(float)
-        except Exception:
-            self.get_logger().error("Failed to parse PointCloud2 points.")
-            self.busy = False
-            return
-
-        if msg.header.frame_id != self.target_frame:
-            pts = self.transform_points(pts, msg.header.frame_id, self.target_frame, msg.header.stamp)
+            pts = self.extract_points(msg)
+            pts = self.transform_cloud_to_target_frame(pts, msg)
             if pts is None:
-                self.busy = False
                 return
 
-        if pts.shape[0] < self.min_points:
-            self.get_logger().warn(
-                f"PCA input ignored: {pts.shape[0]} finite points (minimum {self.min_points} required)."
-            )
-            self.busy = False
-            return
+            if pts.shape[0] < self.min_points:
+                self.get_logger().warn(
+                    f"PCA input ignored: {pts.shape[0]} finite points (minimum {self.min_points} required)."
+                )
+                return
 
+            try:
+                center, frame = self.compute_pca_frame(pts)
+            except RuntimeError as exc:
+                self.get_logger().error(str(exc))
+                return
+            approach_axis_idx = 2 if self.approach_axis_mode == "largest" else 0
+            self.enforce_axis_toward_camera(frame, approach_axis_idx)
+
+            orientation = self.stabilize_orientation(rotation_matrix_to_quaternion(frame))
+            pose_msg = self.build_grasp_pose(center, frame, approach_axis_idx, orientation, msg)
+            self.grasp_pub.publish(pose_msg)
+
+            self.publish_axis_markers(center, frame)
+            self.get_logger().info("Published PCA grasp pose.")
+        finally:
+            self.busy = False
+
+    def extract_points(self, msg: PointCloud2) -> np.ndarray:
+        try:
+            cloud_arr = pc2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True)
+        except Exception as exc:
+            self.get_logger().error(f"Failed to parse PointCloud2 points: {exc}")
+            return np.empty((0, 3), dtype=float)
+
+        if cloud_arr.size == 0:
+            return np.empty((0, 3), dtype=float)
+        return np.column_stack((cloud_arr["x"], cloud_arr["y"], cloud_arr["z"])).astype(float)
+
+    def transform_cloud_to_target_frame(
+        self, pts: np.ndarray, msg: PointCloud2
+    ) -> Optional[np.ndarray]:
+        if msg.header.frame_id == self.target_frame:
+            return pts
+        return self.transform_points(pts, msg.header.frame_id, self.target_frame, msg.header.stamp)
+
+    def compute_pca_frame(self, pts: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         center = pts.mean(axis=0)
-        d = pts - center
-        cov = (d.T @ d) / float(pts.shape[0])
+        centered_points = pts - center
+        covariance = (centered_points.T @ centered_points) / float(pts.shape[0])
 
         try:
-            vals, vecs = np.linalg.eigh(cov)
-        except Exception:
-            self.get_logger().error("PCA eigen decomposition failed.")
-            self.busy = False
-            return
-        # Eigenvalues are ascending from np.linalg.eigh; column 2 is the principal axis.
-        x_axis = vecs[:, 0] # smallest
-        y_axis = vecs[:, 1]
-        z_axis = vecs[:, 2] # largest/principal
+            _, eigenvectors = np.linalg.eigh(covariance)
+        except Exception as exc:
+            raise RuntimeError(f"PCA eigen decomposition failed: {exc}") from exc
 
-        frame = np.column_stack((x_axis, y_axis, z_axis))
+        frame = np.column_stack((eigenvectors[:, 0], eigenvectors[:, 1], eigenvectors[:, 2]))
         if np.linalg.det(frame) < 0.0:
             frame[:, 2] *= -1.0
+        return center, frame
 
-        approach_axis_idx = 2 if self.approach_axis_mode == "largest" else 0
-        self.enforce_axis_toward_camera(frame, approach_axis_idx)
-        q = rotation_matrix_to_quaternion(frame)
-        if self.prev_orientation is not None and float(np.dot(q, self.prev_orientation)) < 0.0:
-            q = -q
-        self.prev_orientation = q.copy()
-        # -axis3 in current convention; now selectable by approach_axis_mode.
+    def stabilize_orientation(self, quaternion: np.ndarray) -> np.ndarray:
+        if self.prev_orientation is not None and float(np.dot(quaternion, self.prev_orientation)) < 0.0:
+            quaternion = -quaternion
+        self.prev_orientation = quaternion.copy()
+        return quaternion
+
+    def build_grasp_pose(
+        self,
+        center: np.ndarray,
+        frame: np.ndarray,
+        approach_axis_idx: int,
+        orientation: np.ndarray,
+        msg: PointCloud2,
+    ) -> PoseStamped:
         approach_axis = -frame[:, approach_axis_idx]
-        grasp_pos = center + approach_axis * self.approach_offset + np.array(
-            [self.grasp_offset_x, self.grasp_offset_y, self.grasp_offset_z]
-        )
+        grasp_pos = center + approach_axis * self.approach_offset + self.grasp_offset
 
         pose_msg = PoseStamped()
         pose_msg.header.frame_id = self.target_frame
@@ -182,15 +227,11 @@ class PCAGraspNode(Node):
         pose_msg.pose.position.x = float(grasp_pos[0])
         pose_msg.pose.position.y = float(grasp_pos[1])
         pose_msg.pose.position.z = float(grasp_pos[2])
-        pose_msg.pose.orientation.x = float(q[0])
-        pose_msg.pose.orientation.y = float(q[1])
-        pose_msg.pose.orientation.z = float(q[2])
-        pose_msg.pose.orientation.w = float(q[3])
-        self.grasp_pub.publish(pose_msg)
-
-        self.publish_axis_markers(center, frame)
-        self.get_logger().info("Published PCA grasp pose.")
-        self.busy = False
+        pose_msg.pose.orientation.x = float(orientation[0])
+        pose_msg.pose.orientation.y = float(orientation[1])
+        pose_msg.pose.orientation.z = float(orientation[2])
+        pose_msg.pose.orientation.w = float(orientation[3])
+        return pose_msg
 
     def transform_points(
         self, pts: np.ndarray, source_frame: str, target_frame: str, stamp
@@ -265,17 +306,17 @@ class PCAGraspNode(Node):
             mk.type = Marker.ARROW
             mk.action = Marker.ADD
             mk.lifetime = Duration(seconds=0.0).to_msg()
-            mk.scale.x = self.axis_width
-            mk.scale.y = self.axis_head_width
-            mk.scale.z = self.axis_head_length
+            mk.scale.x = self.marker_style.axis_width
+            mk.scale.y = self.marker_style.axis_head_width
+            mk.scale.z = self.marker_style.axis_head_length
             mk.color.a = 0.9
             mk.color.r, mk.color.g, mk.color.b = colors[i]
 
             p0 = Point(x=float(center[0]), y=float(center[1]), z=float(center[2]))
             p1 = Point(
-                x=float(center[0] + axis[0] * self.axis_length),
-                y=float(center[1] + axis[1] * self.axis_length),
-                z=float(center[2] + axis[2] * self.axis_length),
+                x=float(center[0] + axis[0] * self.marker_style.axis_length),
+                y=float(center[1] + axis[1] * self.marker_style.axis_length),
+                z=float(center[2] + axis[2] * self.marker_style.axis_length),
             )
             mk.points = [p0, p1]
             markers.markers.append(mk)
@@ -290,9 +331,9 @@ class PCAGraspNode(Node):
         center_marker.lifetime = Duration(seconds=0.0).to_msg()
         center_marker.pose.orientation.w = 1.0
         center_marker.pose.position = Point(x=float(center[0]), y=float(center[1]), z=float(center[2]))
-        center_marker.scale.x = self.center_marker_scale
-        center_marker.scale.y = self.center_marker_scale
-        center_marker.scale.z = self.center_marker_scale
+        center_marker.scale.x = self.marker_style.center_scale
+        center_marker.scale.y = self.marker_style.center_scale
+        center_marker.scale.z = self.marker_style.center_scale
         center_marker.color.a = 0.8
         center_marker.color.r = 1.0
         center_marker.color.g = 1.0

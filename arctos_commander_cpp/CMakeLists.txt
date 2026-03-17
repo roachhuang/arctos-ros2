@@ -11,6 +11,9 @@ find_package(Eigen3 REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(trajectory_msgs REQUIRED)
+find_package(moveit_core REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(tf2 REQUIRED)
@@ -64,6 +67,19 @@ ament_target_dependencies(vision_guided_pick
   tf2_geometry_msgs
 )
 
+add_executable(jacobian_twist_controller src/jacobian_twist_controller.cpp)
+ament_target_dependencies(jacobian_twist_controller
+  rclcpp
+  geometry_msgs
+  sensor_msgs
+  std_msgs
+  trajectory_msgs
+  moveit_core
+  moveit_ros_planning_interface
+  moveit_msgs
+)
+target_link_libraries(jacobian_twist_controller Eigen3::Eigen)
+
 add_executable(pca_grasp_node src/pca_grasp_node.cpp)
 ament_target_dependencies(pca_grasp_node
   rclcpp
@@ -78,6 +94,7 @@ install(TARGETS
   commander
   point_and_inspect
   vision_guided_pick
+  jacobian_twist_controller
   pca_grasp_node
   DESTINATION lib/${PROJECT_NAME}
 )

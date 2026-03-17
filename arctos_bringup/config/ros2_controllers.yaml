@@ -7,9 +7,7 @@ controller_manager:
       type: joint_trajectory_controller/JointTrajectoryController
       
     gripper_controller:
-      # type: parallel_gripper_action_controller/GripperActionController
       type: joint_trajectory_controller/JointTrajectoryController
-      # type: gripper_controllers/GripperActionController
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
@@ -62,9 +60,9 @@ arm_controller:
 
 gripper_controller:
   ros__parameters:
+    # Only the actuated jaw is controlled here. Left_jaw_joint follows via URDF mimic.
     joints: 
       - Right_jaw_joint
-    # interface_name: position
     command_interfaces:
       - position
     state_interfaces:
@@ -73,16 +71,9 @@ gripper_controller:
     state_publish_rate: 50.0
     action_monitor_rate: 50.0
 
-    # action_monitor_rate: 20.0
     goal_tolerance: 0.01
-    # stopped_velocity_tolerance: 0.005
 
-    # Crucial for MTC: Don't fail if the gripper hits the object and stops
+    # Allow the controller to report success for contact-limited closes.
     allow_stalling: true
     stall_timeout: 1.0
     stall_velocity_threshold: 0.001
-
-# joint_state_broadcaster:
-#   ros__parameters:
-#     extra_joints:  # Explicitly publish mimic joints
-#       - Left_jaw_joint

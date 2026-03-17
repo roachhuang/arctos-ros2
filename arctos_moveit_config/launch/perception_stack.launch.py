@@ -46,6 +46,7 @@ def generate_launch_description():
     rviz_config = LaunchConfiguration("rviz_config")
     use_vision_guided_pick = LaunchConfiguration("use_vision_guided_pick")
     use_pca_grasp = LaunchConfiguration("use_pca_grasp")
+    use_jacobian_twist_controller = LaunchConfiguration("use_jacobian_twist_controller")
     vision_pick_execute = LaunchConfiguration("vision_pick_execute")
     vision_pick_object_pose_topic = LaunchConfiguration("vision_pick_object_pose_topic")
     pca_pointcloud_topic = LaunchConfiguration("pca_pointcloud_topic")
@@ -98,6 +99,7 @@ def generate_launch_description():
             "rviz_config": rviz_config,
             "use_vision_guided_pick": use_vision_guided_pick,
             "use_pca_grasp": use_pca_grasp,
+            "use_jacobian_twist_controller": use_jacobian_twist_controller,
             "vision_pick_execute": vision_pick_execute,
             "vision_pick_object_pose_topic": vision_pick_object_pose_topic,
             "pca_pointcloud_topic": pca_pointcloud_topic,
@@ -120,6 +122,7 @@ def generate_launch_description():
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("use_vision_guided_pick", default_value="false"),
             DeclareLaunchArgument("use_pca_grasp", default_value="false"),
+            DeclareLaunchArgument("use_jacobian_twist_controller", default_value="false"),
             DeclareLaunchArgument("vision_pick_execute", default_value="false"),
             DeclareLaunchArgument("vision_pick_object_pose_topic", default_value="/detected_object_pose"),
             DeclareLaunchArgument("pca_pointcloud_topic", default_value="/point_cloud"),

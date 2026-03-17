@@ -4,7 +4,7 @@
   <!-- ARGUMENT TO TOGGLE FAKE HARDWARE -->
   <xacro:arg name="use_fake_hardware" default="false"/>
 
-  <!-- Gripper limits (shared for consistency) -->
+  <!-- Gripper limits for the single actuated jaw; the left jaw mimics in the URDF. -->
   <xacro:property name="gripper_limit_l" value="0.0"/>
   <xacro:property name="gripper_limit_u" value="0.015"/>
 
@@ -43,13 +43,13 @@
           <class_type>arctos_hardware_interface::ArctosHardwareInterface</class_type>
 
           <param name="can_interface">can0</param>
-          <!-- Swap to invert gripper direction (easiest way) -->
+          <!-- Single-jaw gripper parameters consumed by ArctosHardwareInterface. -->
           <param name="gripper_open_position">${gripper_limit_u}</param>
           <param name="gripper_close_position">${gripper_limit_l}</param>
           <param name="wrist_pitch_to_roll_gain">0.0</param>
           <param name="wrist_roll_to_pitch_gain">0.0</param>
           <param name="wrist_b_feedback_gain">0.0</param>
-          <param name="wrist_c_feedback_gain">0.0</param>
+          <param name="wrist_c_feedback_gain">0.00</param>
           <!-- <param name="accel">20</param> -->
           <!-- <param name="vel">500</param> -->
         </xacro:unless>
@@ -62,27 +62,9 @@
       <xacro:arctos_joint name="A_joint" can_id="4" vel="2" acc="8" gear_ratio="48.0" limit_l="${A_min_pos}" limit_u="${A_max_pos}"/>
       <xacro:arctos_joint name="B_joint" can_id="5" vel="2" acc="8" gear_ratio="67.82" limit_l="${B_min_pos}" limit_u="${B_max_pos}"/>
       <xacro:arctos_joint name="C_joint" can_id="6" vel="2" acc="8" gear_ratio="67.82" limit_l="${C_min_pos}" limit_u="${C_max_pos}"/>
-      <xacro:arctos_joint name="Right_jaw_joint" can_id="7" vel="3.5" acc='15.0' gear_ratio="1"
+      <!-- Only Right_jaw_joint is exported to ros2_control; Left_jaw_joint is a mimic joint. -->
+      <xacro:arctos_joint name="Right_jaw_joint" can_id="7" vel="3.5" acc="15.0" gear_ratio="1"
       limit_l="${gripper_limit_l}" limit_u="${gripper_limit_u}"/>
-    <!-- </ros2_control>
-
-    <ros2_control name="gripper" type="system">
-      <hardware>
-        <plugin>mock_components/GenericSystem</plugin>
-      </hardware> -->
-
-      <!-- <joint name="Right_jaw_joint">
-        <command_interface name="position"/>
-        <state_interface name="position">
-          <param name="initial_value">0.0</param>
-        </state_interface>
-        <state_interface name="velocity">
-          <param name="initial_value">0.0</param>
-        </state_interface>    
-        <state_interface name="effort">
-          <param name="initial_value">0.0</param>
-        </state_interface>
-      </joint> -->
     </ros2_control>
 
   </xacro:macro>

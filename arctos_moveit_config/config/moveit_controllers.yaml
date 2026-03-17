@@ -25,11 +25,9 @@ moveit_simple_controller_manager:
     
   gripper_controller:
     type: FollowJointTrajectory
-    # type: GripperCommand
     joints:
       - Right_jaw_joint
-      # - Left_jaw_joint
-    # action_ns: gripper_cmd
+    # Left_jaw_joint is a mimic joint and is not exposed by ros2_control.
     action_ns: follow_joint_trajectory
     default: true
 

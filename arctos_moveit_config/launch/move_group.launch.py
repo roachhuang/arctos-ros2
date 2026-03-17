@@ -50,6 +50,7 @@ def generate_launch_description():
     rviz_config = LaunchConfiguration("rviz_config")
     use_vision_guided_pick = LaunchConfiguration("use_vision_guided_pick")
     use_pca_grasp = LaunchConfiguration("use_pca_grasp")
+    use_jacobian_twist_controller = LaunchConfiguration("use_jacobian_twist_controller")
     vision_pick_execute = LaunchConfiguration("vision_pick_execute")
     vision_pick_object_pose_topic = LaunchConfiguration("vision_pick_object_pose_topic")
     pca_pointcloud_topic = LaunchConfiguration("pca_pointcloud_topic")
@@ -148,6 +149,18 @@ def generate_launch_description():
         ],
     )
 
+    jacobian_twist_controller_node = Node(
+        package="arctos_commander_cpp",
+        executable="jacobian_twist_controller",
+        name="jacobian_twist_controller",
+        output="screen",
+        condition=IfCondition(use_jacobian_twist_controller),
+        parameters=[
+            moveit_config.to_dict(),
+            {"use_sim_time": False},
+        ],
+    )
+
     return LaunchDescription([
         # DeclareLaunchArgument("static_tf_x", default_value="0.5"),
         # DeclareLaunchArgument("static_tf_y", default_value="0.0"),
@@ -159,6 +172,7 @@ def generate_launch_description():
         DeclareLaunchArgument("use_rviz", default_value="true"),
         DeclareLaunchArgument("use_vision_guided_pick", default_value="false"),
         DeclareLaunchArgument("use_pca_grasp", default_value="false"),
+        DeclareLaunchArgument("use_jacobian_twist_controller", default_value="false"),
         DeclareLaunchArgument("vision_pick_execute", default_value="false"),
         DeclareLaunchArgument("vision_pick_object_pose_topic", default_value="/detected_object_pose"),
         DeclareLaunchArgument("pca_pointcloud_topic", default_value="/point_cloud"),
@@ -178,4 +192,5 @@ def generate_launch_description():
         rviz_node,
         vision_guided_pick_node,
         pca_grasp_node,
+        jacobian_twist_controller_node,
     ])

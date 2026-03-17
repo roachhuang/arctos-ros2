@@ -338,6 +338,34 @@ namespace arctos_hardware_interface
         return true;
     }
 
+    bool ArctosHardwareInterface::sendCheckedCanCommandWithRetry(
+        uint16_t id,
+        uint8_t cmd,
+        const std::vector<uint8_t> &params,
+        const char *label,
+        int timeout_ms,
+        int retry_count,
+        int retry_gap_ms,
+        const char *context)
+    {
+        for (int attempt = 1; attempt <= retry_count; ++attempt)
+        {
+            if (sendCheckedCanCommand(id, cmd, params, label, timeout_ms))
+            {
+                return true;
+            }
+
+            if (attempt < retry_count)
+            {
+                RCLCPP_WARN(LOGGER,
+                            "CAN ID %u %s %s retry %d/%d failed, retrying after %d ms",
+                            id, context, label, attempt, retry_count, retry_gap_ms);
+                std::this_thread::sleep_for(std::chrono::milliseconds(retry_gap_ms));
+            }
+        }
+        return false;
+    }
+
     bool ArctosHardwareInterface::configureCanId6Startup()
     {
         constexpr uint16_t kCanId = 6;
@@ -400,74 +428,71 @@ namespace arctos_hardware_interface
         const bool protect_enable = getBool("mks_cfg_canid6_protect_enable", false);
         const auto enableCmdPayload = static_cast<uint8_t>(protect_enable ? 0x01 : 0x00);
 
-        auto sendStartupCmd = [&](uint16_t id,
-                                  uint8_t cmd,
-                                  const std::vector<uint8_t> &params,
-                                  const char *label) -> bool
-        {
-            for (int attempt = 1; attempt <= kCommandRetryCount; ++attempt)
-            {
-                if (sendCheckedCanCommand(id, cmd, params, label, kCommandTimeoutMs))
-                {
-                    return true;
-                }
-
-                RCLCPP_WARN(LOGGER,
-                            "CAN ID %u startup %s retry %d/%d failed, retrying after %d ms",
-                            kCanId, label, attempt, kCommandRetryCount, kRetryGapMs);
-                if (attempt < kCommandRetryCount)
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(kRetryGapMs));
-                }
-            }
-            return false;
-        };
-
-        if (!sendStartupCmd(
+        if (!sendCheckedCanCommandWithRetry(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_SUBDIVISIONS,
                 {0x10}, // 16
-                "Mstep"))
+                "Mstep",
+                kCommandTimeoutMs,
+                kCommandRetryCount,
+                kRetryGapMs,
+                "startup"))
         {
             return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (!sendStartupCmd(
+        if (!sendCheckedCanCommandWithRetry(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_WORKING_MODE,
                 {static_cast<uint8_t>(mode)},
-                "Mode"))
+                "Mode",
+                kCommandTimeoutMs,
+                kCommandRetryCount,
+                kRetryGapMs,
+                "startup"))
         {
             return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (!sendStartupCmd(
+        if (!sendCheckedCanCommandWithRetry(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_ENABLE_SETTINGS,
                 {0x00},
-                "EN pin active level (low)"))
+                "EN pin active level (low)",
+                kCommandTimeoutMs,
+                kCommandRetryCount,
+                kRetryGapMs,
+                "startup"))
         {
             return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (!sendStartupCmd(
+        if (!sendCheckedCanCommandWithRetry(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_CURRENT,
                 {static_cast<uint8_t>((ma >> 8) & 0xFF), static_cast<uint8_t>(ma & 0xFF)},
-                "Run current"))
+                "Run current",
+                kCommandTimeoutMs,
+                kCommandRetryCount,
+                kRetryGapMs,
+                "startup"))
         {
             return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(kCommandGapMs));
 
-        if (!sendStartupCmd(
+        if (!sendCheckedCanCommandWithRetry(
                 kCanId,
                 mks_servo_driver::CANCommands::SET_SHAFT_PROTECTION,
                 {enableCmdPayload},
-                protect_enable ? "Protection enable" : "Protection disable"))
+                protect_enable ? "Protection enable" : "Protection disable",
+                kCommandTimeoutMs,
+                kCommandRetryCount,
+                kRetryGapMs,
+                "startup"))
         {
             return false;
         }
@@ -484,23 +509,28 @@ namespace arctos_hardware_interface
         (void)previous_state;
         constexpr int kStartupQueryTimeoutMs = 120;
         constexpr int kStartupFreshnessMs = 250;
+        constexpr int kEnableTimeoutMs = 200;
+        constexpr int kEnableRetryCount = 3;
+        constexpr int kEnableRetryGapMs = 75;
         RCLCPP_INFO(LOGGER, "Activating hardware and enabling motors...");
         // Enable all motors
         for (const auto &motor : motors_)
         {
-            if (!sendCheckedCanCommand(
+            if (!sendCheckedCanCommandWithRetry(
                     motor.can_id,
                     mks_servo_driver::CANCommands::ENABLE_MOTOR,
                     {0x01},
-                    "Enable motor"))
+                    "Enable motor",
+                    kEnableTimeoutMs,
+                    kEnableRetryCount,
+                    kEnableRetryGapMs,
+                    "activation"))
             {
-                RCLCPP_ERROR(LOGGER,
-                             "Failed to enable CAN ID: %d)", motor.can_id);
-                return CallbackReturn::ERROR;
+                RCLCPP_WARN(LOGGER,
+                            "CAN ID %u did not acknowledge enable during activation; continuing to state verification.",
+                            motor.can_id);
             }
         }
-        
-        RCLCPP_INFO(LOGGER, "All motors enabled.");
 
         for (const auto &motor : motors_)
         {
@@ -515,6 +545,8 @@ namespace arctos_hardware_interface
                 return CallbackReturn::ERROR;
             }
         }
+
+        RCLCPP_INFO(LOGGER, "Motor state verification complete after activation.");
 
         // Standard Joints (0-3)
         for (size_t i = 0; i < MAIN_JOINT_COUNT; ++i)
