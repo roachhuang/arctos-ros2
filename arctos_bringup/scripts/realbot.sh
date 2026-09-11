@@ -1,29 +1,26 @@
 #!/bin/bash
-# Single script to launch the myCobot with Gazebo and ROS 2 Controllers
+# Launch the real Arctos arm (hardware interface + controllers + MoveIt2).
 
-# https://github.com/automaticaddison/mycobot_ros2/tree/main
-# launch 3 files: gz.launch.py, display.launch.py, and load_ros2_controllers.launch.py 
 cleanup() {
     echo "Cleaning up..."
     sleep 5.0
-    sudo pkill -9 -f "ros2|gazebo|gz|nav2|amcl|bt_navigator|nav_to_pose|rviz2|assisted_teleop|cmd_vel_relay|robot_state_publisher|joint_state_publisher|mongod|move_to_free|mqtt|autodock|cliff_detection|moveit|move_group|basic_navigator"
+    sudo pkill -9 -f "ros2|rviz2|robot_state_publisher|joint_state_publisher|moveit|move_group"
 }
 
 # Set up cleanup trap
-trap 'cleanup' SIGINT SIGTERM
+trap cleanup INT TERM
+
+# Reset can0 to a known state (bitrate + auto-recovery on bus-off) before launch
+if ip link show can0 >/dev/null 2>&1; then
+    sudo ip link set can0 down
+    sleep 1
+    sudo ip link set can0 type can bitrate 500000 restart-ms 100
+    sudo ip link set can0 up
+fi
 
 echo "Launching real robot..."
-ros2 launch arctos_bringup real_robot.launch.py \
-    is_sim:=false \
-    # load_controllers:=true \
-    # world_file:=empty_world.world \
-    # use_camera:=true \
-    # use_rviz:=true \
-    # use_robot_state_pub:=true \
-    # x:=0.0 \
-    # y:=0.0 \
-    # z:=0.03 \
-    # roll:=0.0 \
-    # pitch:=0.0 \
-    # yaw:=0.0
-    
+ros2 launch arctos_bringup my_moveit.launch.py \
+    use_ros2_control:=true \
+    use_fake_joint_states:=false \
+    use_kinect:=false \
+    use_rviz:=true
