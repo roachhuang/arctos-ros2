@@ -22,7 +22,7 @@ def generate_launch_description():
         'arctos.urdf.xacro'
     )
     robot_description_content = ParameterValue(
-        Command(['xacro ', urdf_path]),
+        Command(['xacro ', urdf_path, ' use_fake_hardware:=', use_fake_hardware]),
         value_type=str
     )
 
