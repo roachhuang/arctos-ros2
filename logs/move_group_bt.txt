@@ -1,4 +1,0 @@
-Signal        Stop	Print	Pass to program	Description
-SIGSEGV       Yes	Yes	Yes		Segmentation fault
-The program is not being run.
-(gdb) 

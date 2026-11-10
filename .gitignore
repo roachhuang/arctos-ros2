@@ -25,3 +25,5 @@ Thumbs.db
 # Temporary files
 *~
 *.tmp
+logs/
+tensorboard_logs/

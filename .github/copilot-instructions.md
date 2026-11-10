@@ -83,8 +83,8 @@ This file gives concise, actionable guidance for AI coding agents working in thi
 
 **Architecture Overview**
 - **ROS2 multi-package workspace:** key packages include [arctos_bringup](arctos_bringup), [arctos_description](arctos_description), [arctos_hardware_interface](arctos_hardware_interface), [arctos_moveit_config](arctos_moveit_config), [arctos_interfaces](arctos_interfaces).
-- **Hardware & controllers:** the bridge between robot and ROS is in [arctos_hardware_interface/src/arctos_hardware_interface.cpp](arctos_hardware_interface/src/arctos_hardware_interface.cpp) and controller YAMLs in [arctos_bringup/config/ros2_controllers.yaml](arctos_bringup/config/ros2_controllers.yaml) and [arctos_bringup/config/real_controllers.yaml](arctos_bringup/config/real_controllers.yaml).
-- **Simulation integration:** Gazebo and MoveIt are wired via launch files in [arctos_bringup/launch](arctos_bringup/launch) and [arctos_description/launch](arctos_description/launch). Use these to reproduce runtime behaviors.
+- **Hardware & controllers:** the bridge between robot and ROS is in [src/arctos_hardware_interface/src/arctos_hardware_interface.cpp](src/arctos_hardware_interface/src/arctos_hardware_interface.cpp) and controller YAMLs in [src/arctos_bringup/config/ros2_controllers.yaml](src/arctos_bringup/config/ros2_controllers.yaml) and [src/arctos_bringup/config/real_controllers.yaml](src/arctos_bringup/config/real_controllers.yaml).
+- **Simulation integration:** Gazebo and MoveIt are wired via launch files in [src/arctos_bringup/launch](src/arctos_bringup/launch) and [src/arctos_description/launch](src/arctos_description/launch). Use these to reproduce runtime behaviors.
 
 **How components communicate**
 - Hardware interface exposes joints to ros2_control and is configured by YAMLs under arctos_bringup/config.
@@ -105,9 +105,9 @@ This file gives concise, actionable guidance for AI coding agents working in thi
 - Tests are not centralized; when adding tests, follow ament_cmake patterns and place them in `test/` or `src/test` depending on package type.
 
 **Places to read first (quick triage order)**
-- [arctos_hardware_interface/src/arctos_hardware_interface.cpp](arctos_hardware_interface/src/arctos_hardware_interface.cpp) — hardware mapping and lifecycle behavior.
-- [arctos_bringup/launch/ros2_control.launch.py](arctos_bringup/launch/ros2_control.launch.py) or similar — how controllers are loaded.
-- [arctos_bringup/config/ros2_controllers.yaml](arctos_bringup/config/ros2_controllers.yaml) — controller configs.
+- [src/arctos_hardware_interface/src/arctos_hardware_interface.cpp](src/arctos_hardware_interface/src/arctos_hardware_interface.cpp) — hardware mapping and lifecycle behavior.
+- [src/arctos_bringup/launch/ros2_control.launch.py](src/arctos_bringup/launch/ros2_control.launch.py) or similar — how controllers are loaded.
+- [src/arctos_bringup/config/ros2_controllers.yaml](src/arctos_bringup/config/ros2_controllers.yaml) — controller configs.
 - [arctos_moveit_config](arctos_moveit_config) — robot URDF and MoveIt SRDF.
 
 **Editing guidance for AI agents**
@@ -116,8 +116,8 @@ This file gives concise, actionable guidance for AI coding agents working in thi
 - Preserve ROS parameter keys and topics names; search the repo for exact strings before renaming.
 
 **Examples of actionable tasks**
-- Add a controller parameter: update [arctos_bringup/config/ros2_controllers.yaml](arctos_bringup/config/ros2_controllers.yaml) and the matching controller loader in the launch file.
-- Fix hardware joint mapping: modify [arctos_hardware_interface/src/arctos_hardware_interface.cpp](arctos_hardware_interface/src/arctos_hardware_interface.cpp) and verify with a `ros2 launch` of the bringup stack.
+- Add a controller parameter: update [src/arctos_bringup/config/ros2_controllers.yaml](src/arctos_bringup/config/ros2_controllers.yaml) and the matching controller loader in the launch file.
+- Fix hardware joint mapping: modify [src/arctos_hardware_interface/src/arctos_hardware_interface.cpp](src/arctos_hardware_interface/src/arctos_hardware_interface.cpp) and verify with a `ros2 launch` of the bringup stack.
 
 **What not to do**
 - Do not change workspace-level build logic (top-level CMakeLists) without explicit instruction.
