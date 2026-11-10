@@ -1,5 +1,5 @@
 #!/bin/bash
-# Single script to launch the myCobot with Gazebo and ROS 2 Controllers
+# Single script to launch the Arctos with Gazebo and ROS 2 Controllers
 
 # https://github.com/automaticaddison/mycobot_ros2/tree/main
 # launch 3 files: gz.launch.py, display.launch.py, and load_ros2_controllers.launch.py 
@@ -14,7 +14,7 @@ trap 'cleanup' SIGINT SIGTERM
 
 echo "Launching Gazebo simulation..."
 # ros2 launch robotarm_controller gz.launch.py \
-ros2 launch bringup sim_robot.launch.py \
+ros2 launch arctos_bringup sim_robot.launch.py \
     use_sim_time:=true \
     # load_controllers:=true \
     # world_file:=empty_world.world \
